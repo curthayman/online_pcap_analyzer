@@ -51,36 +51,41 @@ A modular Python script for advanced PCAP analysis, including:
    python pcap_analyzer.py --geoip --visualize --extract-files
 
 6. Feature Details
-   GeoIP Lookups:
+   **GeoIP Lookups:**
 
-   When --geoip is enabled and the GeoLite2 database is present, the script will display city and country information for public IPs in the summary output.
+   - When --geoip is enabled and the GeoLite2 database is present, the script will display city and country information for public IPs in the summary output.
 
-   Visualization:
+   **Visualization:**
 
-   Use --visualize to display a protocol distribution pie chart (requires matplotlib).
+   - Use --visualize to display a protocol distribution pie chart (requires matplotlib).
 
-   File Extraction:
+   **File Extraction:**
 
-   Use --extract-files to extract files from HTTP traffic (saved in the extracted_files/ directory).
+   - Use --extract-files to extract files from HTTP traffic (saved in the extracted_files/ directory).
 
-   Threat Feed:
+   **Threat Feed:**
 
-   Use --threat-feed <file> to highlight traffic involving known bad IPs (one IP per line in the file).
+   - Use --threat-feed <file> to highlight traffic involving known bad IPs (one IP per line in the file).
 
-   Feature Toggles:
+   **Feature Toggles:**
 
    Use the --no-* flags to disable specific analyses for faster or more focused runs.
 
+---
+
   * Credits
-     scapy>=2.4.0
-     requests
-     prompt_toolkit
-     tqdm
-     jinja2
-     weasyprint
-     geoip2
-     matplotlib
-     curtthecoder
+     - scapy>=2.4.0
+     - requests
+     - prompt_toolkit
+     - tqdm
+     - jinja2
+     - weasyprint
+     - geoip2
+     - matplotlib
+     - curtthecoder
+   
+---
+
 7. Notes
     Private IP addresses (e.g., 192.168.x.x) will not have GeoIP data.
     For best results, use with PCAPs containing public internet traffic.
