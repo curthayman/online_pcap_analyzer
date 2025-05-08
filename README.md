@@ -37,15 +37,15 @@ A modular Python script for advanced PCAP analysis, including:
    python pcap_analyzer.py [options]
 
 4. Options:
---geoip : Enable GeoIP lookups (requires GeoLite2-City.mmdb and geoip2)
---visualize : Show protocol distribution pie chart (requires matplotlib)
---extract-files : Extract files from HTTP traffic
---threat-feed <file> : Path to file with known bad IPs (one per line)
---no-dns : Disable DNS query/response analysis
---no-arp : Disable ARP spoofing detection
---no-tls : Disable TLS/SSL handshake detection
---no-creds : Disable credential extraction
---no-broadcast : Disable broadcast traffic analysis
+- --geoip : Enable GeoIP lookups (requires GeoLite2-City.mmdb and geoip2)
+- --visualize : Show protocol distribution pie chart (requires matplotlib)
+- --extract-files : Extract files from HTTP traffic
+- --threat-feed <file> : Path to file with known bad IPs (one per line)
+- --no-dns : Disable DNS query/response analysis
+- --no-arp : Disable ARP spoofing detection
+- --no-tls : Disable TLS/SSL handshake detection
+- --no-creds : Disable credential extraction
+- --no-broadcast : Disable broadcast traffic analysis
 
 5. Example
    python pcap_analyzer.py --geoip --visualize --extract-files
