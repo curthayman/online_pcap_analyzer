@@ -6,3 +6,4 @@ jinja2
 weasyprint
 geoip2
 matplotlib
+pyshark
