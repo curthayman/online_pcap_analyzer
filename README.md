@@ -1,96 +1,90 @@
-# Advanced PCAP Analyzer
+# 📊 PCAP/PCAPNG Analyzer Dashboard
+A powerful, interactive Streamlit dashboard for analyzing .pcap and .pcapng network capture files. Instantly visualize network traffic, detect suspicious file transfers, extract credentials, identify access points, and more—all from your browser.
 
-A modular Python script for advanced PCAP analysis, including:
+## Features
+- Upload & Analyze: Supports .pcap, .pcapng, and .cap files.
+- Traffic Overview: See top IPs, protocol distribution, and top conversations.
+- Suspicious File Detection: Flags transfers of potentially malicious file types (e.g., .exe, .js, .bat, etc.).
+- Credential Extraction: Extracts HTTP Basic Auth, FTP, Telnet, and POST credentials (where possible).
+- Access Point Discovery: Detects 802.11 beacons and probe responses (SSID, channel, crypto).
+- DNS Analysis: Top DNS queries and responses.
+- ARP Spoofing Detection: Highlights multiple MACs for the same IP.
+- Broadcast Traffic: Identifies broadcast-heavy sources.
+- User-Friendly: All results are presented in interactive tables and charts.
+  
+## Demo
+Coming soon!
 
-- Protocol and conversation summaries
-- VPN and broadcast detection
-- Credential extraction
-- DNS and ARP analysis
-- GeoIP lookups
-- Visualization
-- File extraction
-- Threat feed integration
+## Installation
+1. Clone the repository
+```
+git clone https://github.com/your-username/pcap-analyzer-dashboard.git
+```
+```
+cd pcap-analyzer-dashboard
+```
+## 2. Install dependencies
+Python 3.8+ required
+```
+pip install -r requirements.txt
+```
+## Dependencies:
 
----
+- streamlit
+- scapy
+- pyshark
+- (and their dependencies)
+## 3. Run the app
 
-## Requirements
+```
+streamlit run app.py
+```
+## Usage
+Open your browser to the Streamlit URL (usually http://localhost:8501).
+Upload a .pcap or .pcapng file.
+Explore the interactive dashboard!
 
-- Python 3.7+
-- See `requirements.txt` for dependencies
 
-- If you run into errors with weasyprint (especially on macOS or Linux), you may need to install system libraries. For example, on Ubuntu:
-- sudo apt-get install libpango-1.0-0 libcairo2 libgdk-pixbuf2.0-0 libffi-dev shared-mime-info
+## How It Works
+- .pcap files: Parsed with Scapy for fast, deep analysis (including full credential extraction and 802.11 support).
+- .pcapng files: Parsed with Pyshark (slower, but supports more modern capture formats).
+- Suspicious Extensions: Transfers of files with risky extensions (e.g., .exe, .js, .bat, etc.) are flagged.
+- Credential Extraction: Attempts to extract cleartext credentials from HTTP, FTP, Telnet, and POST bodies.
+- Access Points: Detects Wi-Fi beacons and probe responses, showing SSID, channel, and encryption.
+- ARP Spoofing: Flags IPs with multiple MAC addresses.
 
----
 
-## Setup
+## Security & Privacy
+- All analysis is local: No data is sent to any server.
+- Temporary files: Uploaded files are stored temporarily and deleted after analysis.
 
-1. **Install dependencies:**
 
-   pip install -r requirements.txt
+## Limitations
+- Encrypted traffic: Cannot extract credentials from encrypted protocols (HTTPS, SSH, etc.).
+- .pcapng: Some credential extraction is limited due to Pyshark parsing.
+- Large files: Performance may degrade with very large capture files.
 
-2. (Optional) For GeoIP lookups:
-   Register for a free account and download the GeoLite2 City database.
-   Place GeoLite2-City.mmdb in the script directory.
 
-3. Usage:
-   python pcap_analyzer.py [options]
+## Contributing
+Pull requests and issues are welcome!
 
-4. Options:
-- --geoip : Enable GeoIP lookups (requires GeoLite2-City.mmdb and geoip2)
-- --visualize : Show protocol distribution pie chart (requires matplotlib)
-- --extract-files : Extract files from HTTP traffic
-- --threat-feed <file> : Path to file with known bad IPs (one per line)
-- --no-dns : Disable DNS query/response analysis
-- --no-arp : Disable ARP spoofing detection
-- --no-tls : Disable TLS/SSL handshake detection
-- --no-creds : Disable credential extraction
-- --no-broadcast : Disable broadcast traffic analysis
+Please open an issue for bugs, feature requests, or questions.
 
-5. Example
-   python pcap_analyzer.py --geoip --visualize --extract-files
+## License
+MIT License
 
-6. Feature Details
-   **GeoIP Lookups:**
+## Credits
+Built with Streamlit, Scapy, and Pyshark.
+Inspired by Wireshark and other network analysis tools.
 
-   - When --geoip is enabled and the GeoLite2 database is present, the script will display city and country information for public IPs in the summary output.
 
-   **Visualization:**
+## Author
+Curt Hayman
 
-   - Use --visualize to display a protocol distribution pie chart (requires matplotlib).
 
-   **File Extraction:**
+## Disclaimer
+For educational and authorized security analysis only.
 
-   - Use --extract-files to extract files from HTTP traffic (saved in the extracted_files/ directory).
+Do not use on networks or files you do not have permission to analyze.
 
-   **Threat Feed:**
-
-   - Use --threat-feed <file> to highlight traffic involving known bad IPs (one IP per line in the file).
-
-   **Feature Toggles:**
-
-   Use the --no-* flags to disable specific analyses for faster or more focused runs.
-
----
-
-  * Credits
-     - scapy>=2.4.0
-     - requests
-     - prompt_toolkit
-     - tqdm
-     - jinja2
-     - weasyprint
-     - geoip2
-     - matplotlib
-     - curtthecoder
-   
----
-
-7. Notes
-    Private IP addresses (e.g., 192.168.x.x) will not have GeoIP data.
-    For best results, use with PCAPs containing public internet traffic.
-    For any issues or feature requests, please open an issue on GitHub.
-
-    If you don’t need GeoIP or PDF/HTML export, you can remove geoip2 and/or weasyprint.
-    If you’re on macOS or Windows, you may need additional system packages for weasyprint and matplotlib (e.g., Cairo, Pango, GDK-Pixbuf for WeasyPrint).
-    All packages are compatible with Python 3.10/3.11 (recommended for Scapy).
+Happy analyzing! 🚀
