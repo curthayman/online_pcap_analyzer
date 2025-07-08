@@ -1,0 +1,6 @@
+scapyenv/
+analyze_pcap.py
+GeoLite2-City.mmdb
+.idea/
+.git/
+.DS_Store
