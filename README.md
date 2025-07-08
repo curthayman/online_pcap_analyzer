@@ -1,8 +1,6 @@
 # 📊 PCAP/PCAPNG Analyzer Dashboard
 A powerful, interactive Streamlit dashboard for analyzing .pcap and .pcapng network capture files. Instantly visualize network traffic, detect suspicious file transfers, extract credentials, identify access points, and more—all from your browser.
 
-screenshot <!-- Replace with your screenshot if available -->
-
 ## Features
 - Upload & Analyze: Supports .pcap, .pcapng, and .cap files.
 - Traffic Overview: See top IPs, protocol distribution, and top conversations.
@@ -14,10 +12,10 @@ screenshot <!-- Replace with your screenshot if available -->
 - Broadcast Traffic: Identifies broadcast-heavy sources.
 - User-Friendly: All results are presented in interactive tables and charts.
   
-##Demo
+## Demo
 Coming soon!
 
-##Installation
+## Installation
 1. Clone the repository
 ```
 git clone https://github.com/your-username/pcap-analyzer-dashboard.git
@@ -37,7 +35,9 @@ scapy
 pyshark
 (and their dependencies)
 ## 3. Run the app
-```streamlit run app.py
+
+```
+streamlit run app.py
 ```
 ## Usage
 Open your browser to the Streamlit URL (usually http://localhost:8501).
@@ -57,6 +57,8 @@ Explore the interactive dashboard!
 ## Security & Privacy
 - All analysis is local: No data is sent to any server.
 - Temporary files: Uploaded files are stored temporarily and deleted after analysis.
+
+
 ## Limitations
 - Encrypted traffic: Cannot extract credentials from encrypted protocols (HTTPS, SSH, etc.).
 - .pcapng: Some credential extraction is limited due to Pyshark parsing.
@@ -74,8 +76,12 @@ MIT License
 ## Credits
 Built with Streamlit, Scapy, and Pyshark.
 Inspired by Wireshark and other network analysis tools.
+
+
 ## Author
 Curt Hayman
+
+
 ## Disclaimer
 For educational and authorized security analysis only.
 
