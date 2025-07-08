@@ -30,10 +30,10 @@ pip install -r requirements.txt
 ```
 ## Dependencies:
 
-streamlit
-scapy
-pyshark
-(and their dependencies)
+- streamlit
+- scapy
+- pyshark
+- (and their dependencies)
 ## 3. Run the app
 
 ```
