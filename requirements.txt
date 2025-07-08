@@ -1,9 +1,6 @@
+streamlit
 scapy>=2.4.0
-requests
-prompt_toolkit
-tqdm
-jinja2
-weasyprint
-geoip2
-matplotlib
 pyshark
+matplotlib
+tqdm
+requests
