@@ -86,5 +86,3 @@ Curt Hayman
 For educational and authorized security analysis only.
 
 Do not use on networks or files you do not have permission to analyze.
-
-Happy analyzing! 🚀
