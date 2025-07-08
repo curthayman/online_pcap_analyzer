@@ -37,7 +37,7 @@ pip install -r requirements.txt
 ## 3. Run the app
 
 ```
-streamlit run app.py
+streamlit run pcap_dashboard.py
 ```
 ## Usage
 Open your browser to the Streamlit URL (usually http://localhost:8501).
