@@ -61,6 +61,7 @@ Preferred communication style: Simple, everyday language.
 - Protocol detection and classification from packet headers:
   - HTTP, DNS, FTP, Telnet (standard protocols)
   - **STUN** - WebRTC NAT traversal (reliable indicator of Slack, Zoom, WebRTC video calls)
+  - **VPN Protocols** - ESP, IKE, OpenVPN, WireGuard, L2TP, PPTP, GRE (IPsec and VPN traffic detection)
 - HTTP transaction reconstruction from TCP streams
 - DNS query extraction and response mapping
 - Credential detection through pattern matching in cleartext protocols
