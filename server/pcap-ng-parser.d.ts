@@ -18,6 +18,7 @@ declare module 'pcap-ng-parser' {
     on(event: 'data', listener: (packet: PCAPNGPacket) => void): this;
     on(event: 'interface', listener: (iface: PCAPNGInterface) => void): this;
     on(event: 'end', listener: () => void): this;
+    on(event: 'finish', listener: () => void): this;
     on(event: 'error', listener: (err: Error) => void): this;
   }
 
