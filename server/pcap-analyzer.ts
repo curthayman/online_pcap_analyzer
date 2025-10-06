@@ -255,8 +255,75 @@ async function analyzePcapngFile(
     const parser = new PCAPNGParser();
     const fileStream = createReadStream(filePath);
 
-    fileStream.pipe(parser)
-      .on('data', (rawPacket: any) => {
+    let hasEnded = false;
+    const completeAnalysis = () => {
+      if (hasEnded) return;
+      hasEnded = true;
+      
+      progressCallback?.(75, 'Building network topology...', 'finalizing');
+      
+      const duration = (endTime - startTime) / 1000;
+      
+      // Calculate top talkers
+      const nodePacketCounts = new Map<string, number>();
+      packets.forEach(p => {
+        if (p.sourceIP) {
+          nodePacketCounts.set(p.sourceIP, (nodePacketCounts.get(p.sourceIP) || 0) + 1);
+        }
+      });
+      
+      const topTalkers = Array.from(nodePacketCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([ip, count]) => ({
+          ip,
+          packets: count,
+          bytes: connections.get(ip)?.bytes || 0,
+        }));
+
+      progressCallback?.(85, 'Generating statistics...', 'finalizing');
+
+      // Create timeline data (simplified)
+      const timelineData = createTimeline(packets, startTime, endTime);
+
+      const statistics: PcapStatistics = {
+        totalPackets: packets.length,
+        totalBytes,
+        duration,
+        protocolDistribution: Object.fromEntries(protocolCount),
+        topTalkers,
+        timelineData,
+      };
+
+      progressCallback?.(95, 'Finalizing analysis...', 'finalizing');
+
+      const result: AnalysisResult = {
+        analysis: {
+          id: analysisId,
+          fileName,
+          fileSize,
+          uploadedAt: new Date().toISOString(),
+          status: 'completed',
+          totalPackets: packets.length,
+          duration,
+          protocols: Array.from(protocolCount.keys()),
+        },
+        statistics,
+        nodes: Array.from(nodes.values()),
+        connections: Array.from(connections.values()),
+        httpTransactions,
+        dnsQueries,
+        extractedFiles,
+        credentials,
+        packets: packets.slice(0, 1000), // Limit to first 1000 packets
+      };
+
+      progressCallback?.(100, 'Analysis completed!', 'completed');
+
+      resolve(result);
+    };
+
+    parser.on('data', (rawPacket: any) => {
         try {
           // PCAPNG packet structure is different from PCAP
           const timestamp = rawPacket.timestamp || Date.now();
@@ -330,73 +397,23 @@ async function analyzePcapngFile(
         } catch (err) {
           // Skip malformed packets
         }
-      })
-      .on('end', () => {
-        progressCallback?.(75, 'Building network topology...', 'finalizing');
-        
-        const duration = (endTime - startTime) / 1000;
-        
-        // Calculate top talkers
-        const nodePacketCounts = new Map<string, number>();
-        packets.forEach(p => {
-          if (p.sourceIP) {
-            nodePacketCounts.set(p.sourceIP, (nodePacketCounts.get(p.sourceIP) || 0) + 1);
-          }
-        });
-        
-        const topTalkers = Array.from(nodePacketCounts.entries())
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 10)
-          .map(([ip, count]) => ({
-            ip,
-            packets: count,
-            bytes: connections.get(ip)?.bytes || 0,
-          }));
-
-        progressCallback?.(85, 'Generating statistics...', 'finalizing');
-
-        // Create timeline data (simplified)
-        const timelineData = createTimeline(packets, startTime, endTime);
-
-        const statistics: PcapStatistics = {
-          totalPackets: packets.length,
-          totalBytes,
-          duration,
-          protocolDistribution: Object.fromEntries(protocolCount),
-          topTalkers,
-          timelineData,
-        };
-
-        progressCallback?.(95, 'Finalizing analysis...', 'finalizing');
-
-        const result: AnalysisResult = {
-          analysis: {
-            id: analysisId,
-            fileName,
-            fileSize,
-            uploadedAt: new Date().toISOString(),
-            status: 'completed',
-            totalPackets: packets.length,
-            duration,
-            protocols: Array.from(protocolCount.keys()),
-          },
-          statistics,
-          nodes: Array.from(nodes.values()),
-          connections: Array.from(connections.values()),
-          httpTransactions,
-          dnsQueries,
-          extractedFiles,
-          credentials,
-          packets: packets.slice(0, 1000), // Limit to first 1000 packets
-        };
-
-        progressCallback?.(100, 'Analysis completed!', 'completed');
-
-        resolve(result);
-      })
-      .on('error', (err: Error) => {
-        reject(err);
       });
+    
+    // Listen to both parser and fileStream end events
+    parser.on('end', completeAnalysis);
+    parser.on('finish', completeAnalysis);
+    fileStream.on('end', completeAnalysis);
+    fileStream.on('close', completeAnalysis);
+    
+    parser.on('error', (err: Error) => {
+      reject(err);
+    });
+    
+    fileStream.on('error', (err: Error) => {
+      reject(err);
+    });
+
+    fileStream.pipe(parser);
   });
 }
 
