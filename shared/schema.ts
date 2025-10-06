@@ -116,6 +116,40 @@ export const packetSchema = z.object({
 
 export type Packet = z.infer<typeof packetSchema>;
 
+// WiFi Frame Schema
+export const wifiFrameSchema = z.object({
+  id: z.string(),
+  timestamp: z.string(),
+  frameType: z.string(),
+  frameSubtype: z.string(),
+  sourceMAC: z.string().optional(),
+  destMAC: z.string().optional(),
+  bssid: z.string().optional(),
+  ssid: z.string().optional(),
+  channel: z.number().optional(),
+  signalStrength: z.number().optional(),
+  dataRate: z.number().optional(),
+  encrypted: z.boolean().optional(),
+  info: z.string().optional(),
+});
+
+export type WiFiFrame = z.infer<typeof wifiFrameSchema>;
+
+// WiFi Network Schema
+export const wifiNetworkSchema = z.object({
+  id: z.string(),
+  ssid: z.string(),
+  bssid: z.string(),
+  channel: z.number().optional(),
+  encryption: z.string().optional(),
+  signalStrength: z.number().optional(),
+  beaconCount: z.number(),
+  dataFrameCount: z.number(),
+  clientMACs: z.array(z.string()),
+});
+
+export type WiFiNetwork = z.infer<typeof wifiNetworkSchema>;
+
 // Statistics Schema
 export const pcapStatisticsSchema = z.object({
   totalPackets: z.number(),
@@ -146,6 +180,8 @@ export const analysisResultSchema = z.object({
   extractedFiles: z.array(extractedFileSchema),
   credentials: z.array(credentialSchema),
   packets: z.array(packetSchema),
+  wifiFrames: z.array(wifiFrameSchema).optional(),
+  wifiNetworks: z.array(wifiNetworkSchema).optional(),
 });
 
 export type AnalysisResult = z.infer<typeof analysisResultSchema>;
