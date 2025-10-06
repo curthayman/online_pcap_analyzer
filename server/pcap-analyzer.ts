@@ -549,6 +549,7 @@ function parsePacket(data: Buffer, timestamp: number): ParsedPacket | null {
         destPort,
         length: data.length,
         info,
+        payload,
       };
     }
 
