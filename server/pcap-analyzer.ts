@@ -1,5 +1,7 @@
 import { createReadStream } from 'fs';
+import { readFile } from 'fs/promises';
 import pcapp from 'pcap-parser';
+import PCAPNGParser from 'pcap-ng-parser';
 import type {
   AnalysisResult,
   NetworkNode,
@@ -23,6 +25,30 @@ interface PcapPacket {
   data: Buffer;
 }
 
+async function detectFileFormat(filePath: string): Promise<'pcap' | 'pcapng'> {
+  const buffer = await readFile(filePath);
+  const magicNumber = buffer.readUInt32BE(0);
+  
+  // PCAPNG magic number: 0x0a0d0d0a
+  if (magicNumber === 0x0a0d0d0a) {
+    return 'pcapng';
+  }
+  
+  // PCAP magic numbers: 0xa1b2c3d4 (big-endian) or 0xd4c3b2a1 (little-endian)
+  if (magicNumber === 0xa1b2c3d4 || magicNumber === 0xd4c3b2a1) {
+    return 'pcap';
+  }
+  
+  // Try little-endian read
+  const magicNumberLE = buffer.readUInt32LE(0);
+  if (magicNumberLE === 0x0a0d0d0a) {
+    return 'pcapng';
+  }
+  
+  // Default to pcap for backwards compatibility
+  return 'pcap';
+}
+
 export async function analyzePcapFile(
   filePath: string,
   fileName: string,
@@ -30,6 +56,13 @@ export async function analyzePcapFile(
   analysisId: string,
   progressCallback?: (progress: number, message: string, step?: string) => void
 ): Promise<AnalysisResult> {
+  // Detect file format
+  const format = await detectFileFormat(filePath);
+  
+  if (format === 'pcapng') {
+    return analyzePcapngFile(filePath, fileName, fileSize, analysisId, progressCallback);
+  }
+  
   return new Promise((resolve, reject) => {
     const packets: Packet[] = [];
     const nodes = new Map<string, NetworkNode>();
@@ -192,6 +225,178 @@ export async function analyzePcapFile(
     parser.on('error', (err: Error) => {
       reject(err);
     });
+  });
+}
+
+async function analyzePcapngFile(
+  filePath: string,
+  fileName: string,
+  fileSize: number,
+  analysisId: string,
+  progressCallback?: (progress: number, message: string, step?: string) => void
+): Promise<AnalysisResult> {
+  return new Promise((resolve, reject) => {
+    const packets: Packet[] = [];
+    const nodes = new Map<string, NetworkNode>();
+    const connections = new Map<string, NetworkConnection>();
+    const httpTransactions: HttpTransaction[] = [];
+    const dnsQueries: DnsQuery[] = [];
+    const extractedFiles: ExtractedFile[] = [];
+    const credentials: Credential[] = [];
+    const protocolCount = new Map<string, number>();
+
+    let totalBytes = 0;
+    let startTime = 0;
+    let endTime = 0;
+    let packetCount = 0;
+
+    progressCallback?.(10, 'Starting PCAPNG analysis...', 'parsing');
+
+    const parser = new PCAPNGParser();
+    const fileStream = createReadStream(filePath);
+
+    fileStream.pipe(parser)
+      .on('data', (rawPacket: any) => {
+        try {
+          // PCAPNG packet structure is different from PCAP
+          const timestamp = rawPacket.timestamp || Date.now();
+          
+          if (startTime === 0) startTime = timestamp;
+          endTime = timestamp;
+          totalBytes += rawPacket.data?.length || 0;
+          packetCount++;
+
+          // Report progress every 100 packets
+          if (packetCount % 100 === 0) {
+            const progress = Math.min(20 + (packetCount / 100) * 2, 70);
+            progressCallback?.(progress, `Parsed ${packetCount} packets...`, 'analyzing');
+          }
+
+          const packetData = parsePacket(rawPacket.data, timestamp);
+          if (packetData) {
+            packets.push(packetData);
+            
+            // Track protocol distribution
+            const count = protocolCount.get(packetData.protocol) || 0;
+            protocolCount.set(packetData.protocol, count + 1);
+
+            // Track nodes
+            if (packetData.sourceIP) {
+              addOrUpdateNode(nodes, packetData.sourceIP, packetData.protocol);
+            }
+            if (packetData.destIP) {
+              addOrUpdateNode(nodes, packetData.destIP, packetData.protocol);
+            }
+
+            // Track connections
+            if (packetData.sourceIP && packetData.destIP) {
+              addOrUpdateConnection(
+                connections,
+                packetData.sourceIP,
+                packetData.destIP,
+                packetData.protocol,
+                packetData.length
+              );
+            }
+
+            // Extract HTTP data
+            if (packetData.protocol === 'HTTP') {
+              const http = parseHttp(rawPacket.data, packetData, timestamp);
+              if (http) {
+                httpTransactions.push(http);
+                
+                // Extract credentials from HTTP
+                const cred = extractHttpCredentials(http, timestamp);
+                if (cred) credentials.push(cred);
+
+                // Extract files from HTTP
+                const file = extractHttpFile(http, timestamp);
+                if (file) extractedFiles.push(file);
+              }
+            }
+
+            // Extract DNS data
+            if (packetData.protocol === 'DNS') {
+              const dns = parseDns(rawPacket.data, packetData, timestamp);
+              if (dns) dnsQueries.push(dns);
+            }
+
+            // Extract FTP/Telnet credentials
+            if (packetData.protocol === 'FTP' || packetData.protocol === 'TELNET') {
+              const cred = extractPlaintextCredentials(rawPacket.data, packetData, timestamp);
+              if (cred) credentials.push(cred);
+            }
+          }
+        } catch (err) {
+          // Skip malformed packets
+        }
+      })
+      .on('end', () => {
+        progressCallback?.(75, 'Building network topology...', 'finalizing');
+        
+        const duration = (endTime - startTime) / 1000;
+        
+        // Calculate top talkers
+        const nodePacketCounts = new Map<string, number>();
+        packets.forEach(p => {
+          if (p.sourceIP) {
+            nodePacketCounts.set(p.sourceIP, (nodePacketCounts.get(p.sourceIP) || 0) + 1);
+          }
+        });
+        
+        const topTalkers = Array.from(nodePacketCounts.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 10)
+          .map(([ip, count]) => ({
+            ip,
+            packets: count,
+            bytes: connections.get(ip)?.bytes || 0,
+          }));
+
+        progressCallback?.(85, 'Generating statistics...', 'finalizing');
+
+        // Create timeline data (simplified)
+        const timelineData = createTimeline(packets, startTime, endTime);
+
+        const statistics: PcapStatistics = {
+          totalPackets: packets.length,
+          totalBytes,
+          duration,
+          protocolDistribution: Object.fromEntries(protocolCount),
+          topTalkers,
+          timelineData,
+        };
+
+        progressCallback?.(95, 'Finalizing analysis...', 'finalizing');
+
+        const result: AnalysisResult = {
+          analysis: {
+            id: analysisId,
+            fileName,
+            fileSize,
+            uploadedAt: new Date().toISOString(),
+            status: 'completed',
+            totalPackets: packets.length,
+            duration,
+            protocols: Array.from(protocolCount.keys()),
+          },
+          statistics,
+          nodes: Array.from(nodes.values()),
+          connections: Array.from(connections.values()),
+          httpTransactions,
+          dnsQueries,
+          extractedFiles,
+          credentials,
+          packets: packets.slice(0, 1000), // Limit to first 1000 packets
+        };
+
+        progressCallback?.(100, 'Analysis completed!', 'completed');
+
+        resolve(result);
+      })
+      .on('error', (err: Error) => {
+        reject(err);
+      });
   });
 }
 

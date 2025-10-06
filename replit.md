@@ -53,7 +53,10 @@ Preferred communication style: Simple, everyday language.
 5. Analysis results stored in memory and returned to client
 
 **Data Processing**
-- PCAP file parsing done with `pcap-parser` package streaming binary packet data
+- PCAP file parsing with dual parser support:
+  - `pcap-parser` for classic PCAP format (magic number 0xa1b2c3d4)
+  - `pcap-ng-parser` for PCAPNG format (magic number 0x0a0d0d0a)
+- Automatic format detection by reading file magic number
 - Network topology extracted by analyzing source/destination IPs and MAC addresses
 - Protocol detection and classification from packet headers
 - HTTP transaction reconstruction from TCP streams
