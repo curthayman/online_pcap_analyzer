@@ -62,6 +62,19 @@ Preferred communication style: Simple, everyday language.
   - HTTP, DNS, FTP, Telnet (standard protocols)
   - **STUN** - WebRTC NAT traversal (reliable indicator of Slack, Zoom, WebRTC video calls)
   - **VPN Protocols** - ESP, IKE, OpenVPN, WireGuard, L2TP, PPTP, GRE (IPsec and VPN traffic detection)
+  - **WiFi (802.11)** - Wireless network frame analysis with Radiotap header support
+- Link layer type detection for different capture formats:
+  - Ethernet (linkLayerType 1) - standard wired networks
+  - IEEE 802.11 with Radiotap (linkLayerType 127) - WiFi with signal strength and channel info
+  - IEEE 802.11 raw (linkLayerType 105) - basic WiFi frame parsing
+- WiFi frame parsing capabilities:
+  - SSID extraction from beacon and probe frames
+  - BSSID (access point MAC address) identification
+  - Signal strength (dBm) from Radiotap headers
+  - Channel and data rate detection
+  - Encryption detection (WPA/WPA2/Open networks)
+  - Client device tracking by MAC address
+  - Frame type classification (Management, Control, Data)
 - HTTP transaction reconstruction from TCP streams
 - DNS query extraction and response mapping
 - Credential detection through pattern matching in cleartext protocols
@@ -97,6 +110,8 @@ Preferred communication style: Simple, everyday language.
 - `ExtractedFile`: Files extracted from traffic with base64-encoded data
 - `Credential`: Username/password pairs found in cleartext protocols
 - `Packet`: Individual packet details with timestamp and protocol info
+- `WiFiFrame`: 802.11 wireless frame details with SSID, BSSID, signal strength, and channel info
+- `WiFiNetwork`: Aggregated WiFi network information with beacon counts, encryption, and client tracking
 
 ### External Dependencies
 

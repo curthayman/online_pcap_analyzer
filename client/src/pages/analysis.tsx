@@ -60,7 +60,6 @@ export default function Analysis() {
   }
 
   const hasWiFi = result.wifiNetworks && result.wifiNetworks.length > 0;
-  const tabCount = hasWiFi ? 7 : 6;
 
   return (
     <div className="min-h-screen bg-background">
@@ -118,7 +117,7 @@ export default function Analysis() {
 
           {/* Tabs */}
           <Tabs defaultValue="overview" className="w-full">
-            <TabsList className={`grid w-full grid-cols-3 lg:grid-cols-${tabCount} gap-1 h-auto p-1 bg-muted/50`}>
+            <TabsList className={hasWiFi ? "grid w-full grid-cols-3 lg:grid-cols-7 gap-1 h-auto p-1 bg-muted/50" : "grid w-full grid-cols-3 lg:grid-cols-6 gap-1 h-auto p-1 bg-muted/50"}>
               <TabsTrigger value="overview" data-testid="tab-overview" className="data-[state=inactive]:text-foreground/80">Overview</TabsTrigger>
               <TabsTrigger value="http" data-testid="tab-http" className="data-[state=inactive]:text-foreground/80">HTTP</TabsTrigger>
               <TabsTrigger value="dns" data-testid="tab-dns" className="data-[state=inactive]:text-foreground/80">DNS</TabsTrigger>
