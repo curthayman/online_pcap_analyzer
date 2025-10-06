@@ -12,6 +12,8 @@ import type {
   Credential,
   Packet,
   PcapStatistics,
+  WiFiFrame,
+  WiFiNetwork,
 } from '@shared/schema';
 import { randomUUID } from 'crypto';
 
@@ -72,15 +74,23 @@ export async function analyzePcapFile(
     const extractedFiles: ExtractedFile[] = [];
     const credentials: Credential[] = [];
     const protocolCount = new Map<string, number>();
+    const wifiFrames: WiFiFrame[] = [];
+    const wifiNetworks = new Map<string, WiFiNetwork>();
 
     let totalBytes = 0;
     let startTime = 0;
     let endTime = 0;
     let packetCount = 0;
+    let linkLayerType = 1; // Default to Ethernet
 
     progressCallback?.(10, 'Starting PCAP analysis...', 'parsing');
 
     const parser = pcapp.parse(filePath);
+
+    parser.on('globalHeader', (header: any) => {
+      linkLayerType = header.linkLayerType || 1;
+      console.log(`PCAP Link Layer Type: ${linkLayerType}`);
+    });
 
     parser.on('packet', (rawPacket: PcapPacket) => {
       try {
@@ -98,9 +108,24 @@ export async function analyzePcapFile(
           progressCallback?.(progress, `Parsed ${packetCount} packets...`, 'analyzing');
         }
 
-        const packetData = parsePacket(rawPacket.data, timestamp);
+        const packetData = parsePacket(rawPacket.data, timestamp, linkLayerType);
         if (packetData) {
           packets.push(packetData);
+          
+          // Handle WiFi frames
+          if (packetData.wifiFrame) {
+            wifiFrames.push(packetData.wifiFrame);
+            
+            // Track WiFi networks
+            if (packetData.wifiFrame.bssid && packetData.wifiFrame.ssid) {
+              addOrUpdateWiFiNetwork(
+                wifiNetworks,
+                packetData.wifiFrame.bssid,
+                packetData.wifiFrame.ssid,
+                packetData.wifiFrame
+              );
+            }
+          }
           
           // Track protocol distribution
           const count = protocolCount.get(packetData.protocol) || 0;
@@ -215,6 +240,8 @@ export async function analyzePcapFile(
         extractedFiles,
         credentials,
         packets: packets.slice(0, 1000), // Limit to first 1000 packets
+        wifiFrames: wifiFrames.length > 0 ? wifiFrames.slice(0, 1000) : undefined,
+        wifiNetworks: wifiNetworks.size > 0 ? Array.from(wifiNetworks.values()) : undefined,
       };
 
       progressCallback?.(100, 'Analysis completed!', 'completed');
@@ -244,6 +271,8 @@ async function analyzePcapngFile(
     const extractedFiles: ExtractedFile[] = [];
     const credentials: Credential[] = [];
     const protocolCount = new Map<string, number>();
+    const wifiFrames: WiFiFrame[] = [];
+    const wifiNetworks = new Map<string, WiFiNetwork>();
 
     let totalBytes = 0;
     let startTime = 0;
@@ -316,6 +345,8 @@ async function analyzePcapngFile(
         extractedFiles,
         credentials,
         packets: packets.slice(0, 1000), // Limit to first 1000 packets
+        wifiFrames: wifiFrames.length > 0 ? wifiFrames.slice(0, 1000) : undefined,
+        wifiNetworks: wifiNetworks.size > 0 ? Array.from(wifiNetworks.values()) : undefined,
       };
 
       progressCallback?.(100, 'Analysis completed!', 'completed');
@@ -342,6 +373,21 @@ async function analyzePcapngFile(
           const packetData = parsePacket(rawPacket.data, timestamp);
           if (packetData) {
             packets.push(packetData);
+            
+            // Handle WiFi frames
+            if (packetData.wifiFrame) {
+              wifiFrames.push(packetData.wifiFrame);
+              
+              // Track WiFi networks
+              if (packetData.wifiFrame.bssid && packetData.wifiFrame.ssid) {
+                addOrUpdateWiFiNetwork(
+                  wifiNetworks,
+                  packetData.wifiFrame.bssid,
+                  packetData.wifiFrame.ssid,
+                  packetData.wifiFrame
+                );
+              }
+            }
             
             // Track protocol distribution
             const count = protocolCount.get(packetData.protocol) || 0;
@@ -419,10 +465,16 @@ async function analyzePcapngFile(
 
 interface ParsedPacket extends Packet {
   payload?: Buffer;
+  wifiFrame?: WiFiFrame;
 }
 
-function parsePacket(data: Buffer, timestamp: number): ParsedPacket | null {
+function parsePacket(data: Buffer, timestamp: number, linkLayerType: number = 1): ParsedPacket | null {
   try {
+    // Check for WiFi (802.11) link layer
+    if (linkLayerType === 105 || linkLayerType === 127) {
+      return parseWiFiPacket(data, timestamp, linkLayerType);
+    }
+    
     // Parse Ethernet header (14 bytes)
     if (data.length < 14) return null;
 
@@ -604,6 +656,244 @@ function addOrUpdateConnection(
   
   conn.packetCount++;
   conn.bytes += bytes;
+}
+
+function addOrUpdateWiFiNetwork(
+  networks: Map<string, WiFiNetwork>,
+  bssid: string,
+  ssid: string,
+  frame: WiFiFrame
+) {
+  let network = networks.get(bssid);
+  
+  if (!network) {
+    network = {
+      id: randomUUID(),
+      ssid,
+      bssid,
+      channel: frame.channel,
+      encryption: frame.encrypted ? 'Encrypted' : 'Open',
+      signalStrength: frame.signalStrength,
+      beaconCount: 0,
+      dataFrameCount: 0,
+      clientMACs: [],
+    };
+    networks.set(bssid, network);
+  }
+  
+  // Update network info
+  if (frame.frameSubtype === 'Beacon') {
+    network.beaconCount++;
+  } else if (frame.frameType === 'Data') {
+    network.dataFrameCount++;
+  }
+  
+  // Track client MACs
+  if (frame.sourceMAC && !network.clientMACs.includes(frame.sourceMAC) && frame.sourceMAC !== bssid) {
+    network.clientMACs.push(frame.sourceMAC);
+  }
+  if (frame.destMAC && !network.clientMACs.includes(frame.destMAC) && frame.destMAC !== bssid) {
+    network.clientMACs.push(frame.destMAC);
+  }
+  
+  // Update signal strength if available
+  if (frame.signalStrength && (!network.signalStrength || frame.signalStrength > network.signalStrength)) {
+    network.signalStrength = frame.signalStrength;
+  }
+}
+
+function parseWiFiPacket(data: Buffer, timestamp: number, linkLayerType: number): ParsedPacket | null {
+  try {
+    let offset = 0;
+    let channel: number | undefined;
+    let signalStrength: number | undefined;
+    let dataRate: number | undefined;
+    
+    // Parse Radiotap header if present (linkLayerType 127)
+    if (linkLayerType === 127) {
+      if (data.length < 8) return null;
+      
+      const radiotapLength = data.readUInt16LE(2);
+      if (data.length < radiotapLength) return null;
+      
+      // Parse Radiotap fields
+      const presentFlags = data.readUInt32LE(4);
+      let radiotapOffset = 8;
+      
+      // Channel (bit 3)
+      if (presentFlags & (1 << 3)) {
+        if (radiotapOffset + 4 <= radiotapLength) {
+          const freq = data.readUInt16LE(radiotapOffset);
+          // Convert frequency to channel (2.4GHz band)
+          if (freq >= 2412 && freq <= 2484) {
+            channel = Math.floor((freq - 2412) / 5) + 1;
+          }
+          radiotapOffset += 4;
+        }
+      }
+      
+      // Signal strength (bit 5 - dBm antenna signal)
+      if (presentFlags & (1 << 5)) {
+        if (radiotapOffset + 1 <= radiotapLength) {
+          signalStrength = data.readInt8(radiotapOffset);
+          radiotapOffset += 1;
+        }
+      }
+      
+      // Data rate (bit 2)
+      if (presentFlags & (1 << 2)) {
+        if (radiotapOffset + 1 <= radiotapLength) {
+          dataRate = data.readUInt8(radiotapOffset) * 0.5; // In Mbps
+          radiotapOffset += 1;
+        }
+      }
+      
+      offset = radiotapLength;
+    }
+    
+    // Parse 802.11 frame
+    if (data.length < offset + 24) return null; // Minimum WiFi frame header
+    
+    const frameControl = data.readUInt16LE(offset);
+    const frameType = (frameControl >> 2) & 0x03;
+    const frameSubtype = (frameControl >> 4) & 0x0f;
+    
+    const frameTypeNames = ['Management', 'Control', 'Data', 'Extension'];
+    const frameTypeName = frameTypeNames[frameType] || 'Unknown';
+    
+    const managementSubtypes: { [key: number]: string } = {
+      0x00: 'Association Request',
+      0x01: 'Association Response',
+      0x02: 'Reassociation Request',
+      0x03: 'Reassociation Response',
+      0x04: 'Probe Request',
+      0x05: 'Probe Response',
+      0x08: 'Beacon',
+      0x09: 'ATIM',
+      0x0a: 'Disassociation',
+      0x0b: 'Authentication',
+      0x0c: 'Deauthentication',
+    };
+    
+    const dataSubtypes: { [key: number]: string } = {
+      0x00: 'Data',
+      0x01: 'Data + CF-Ack',
+      0x02: 'Data + CF-Poll',
+      0x03: 'Data + CF-Ack + CF-Poll',
+      0x04: 'Null',
+      0x08: 'QoS Data',
+    };
+    
+    let frameSubtypeName = 'Unknown';
+    if (frameType === 0) {
+      frameSubtypeName = managementSubtypes[frameSubtype] || `Management ${frameSubtype}`;
+    } else if (frameType === 2) {
+      frameSubtypeName = dataSubtypes[frameSubtype] || `Data ${frameSubtype}`;
+    } else {
+      frameSubtypeName = `Type${frameType} Subtype${frameSubtype}`;
+    }
+    
+    // Parse MAC addresses
+    const addr1 = formatMAC(data.slice(offset + 4, offset + 10));
+    const addr2 = formatMAC(data.slice(offset + 10, offset + 16));
+    const addr3 = formatMAC(data.slice(offset + 16, offset + 22));
+    
+    // Determine source, dest, BSSID based on frame type
+    let sourceMAC: string | undefined;
+    let destMAC: string | undefined;
+    let bssid: string | undefined;
+    
+    const toDS = (frameControl & 0x0100) !== 0;
+    const fromDS = (frameControl & 0x0200) !== 0;
+    
+    if (!toDS && !fromDS) {
+      // IBSS or management
+      destMAC = addr1;
+      sourceMAC = addr2;
+      bssid = addr3;
+    } else if (!toDS && fromDS) {
+      // From AP to station
+      destMAC = addr1;
+      bssid = addr2;
+      sourceMAC = addr3;
+    } else if (toDS && !fromDS) {
+      // From station to AP
+      bssid = addr1;
+      sourceMAC = addr2;
+      destMAC = addr3;
+    } else {
+      // WDS (wireless distribution system)
+      destMAC = addr1;
+      sourceMAC = addr2;
+      bssid = addr3;
+    }
+    
+    // Parse SSID from beacon/probe frames
+    let ssid: string | undefined;
+    let encrypted: boolean | undefined;
+    
+    if (frameType === 0 && (frameSubtype === 0x08 || frameSubtype === 0x05 || frameSubtype === 0x04)) {
+      // Beacon, Probe Response, or Probe Request
+      const fixedParams = offset + 24;
+      let ieOffset = fixedParams + (frameSubtype === 0x08 ? 12 : frameSubtype === 0x05 ? 12 : 0);
+      
+      // Parse information elements
+      while (ieOffset + 2 < data.length) {
+        const elementId = data[ieOffset];
+        const elementLen = data[ieOffset + 1];
+        
+        if (ieOffset + 2 + elementLen > data.length) break;
+        
+        // SSID element (ID = 0)
+        if (elementId === 0 && elementLen > 0) {
+          ssid = data.slice(ieOffset + 2, ieOffset + 2 + elementLen).toString('utf8').trim();
+        }
+        
+        // RSN element (ID = 48) or WPA vendor element (ID = 221)
+        if (elementId === 48 || (elementId === 221 && elementLen >= 4)) {
+          encrypted = true;
+        }
+        
+        ieOffset += 2 + elementLen;
+      }
+    }
+    
+    const wifiFrame: WiFiFrame = {
+      id: randomUUID(),
+      timestamp: new Date(timestamp).toISOString(),
+      frameType: frameTypeName,
+      frameSubtype: frameSubtypeName,
+      sourceMAC,
+      destMAC,
+      bssid,
+      ssid,
+      channel,
+      signalStrength,
+      dataRate,
+      encrypted,
+      info: `${frameTypeName}: ${frameSubtypeName}`,
+    };
+    
+    return {
+      id: randomUUID(),
+      timestamp: new Date(timestamp).toISOString(),
+      protocol: `WiFi-${frameTypeName}`,
+      sourceIP: sourceMAC || 'Unknown',
+      destIP: destMAC || 'Unknown',
+      length: data.length,
+      info: wifiFrame.info,
+      wifiFrame,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function formatMAC(buffer: Buffer): string {
+  return Array.from(buffer)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join(':')
+    .toUpperCase();
 }
 
 function parseHttp(data: Buffer, packet: Packet, timestamp: number): HttpTransaction | null {
