@@ -11,6 +11,7 @@ import { DnsTable } from "@/components/dns-table";
 import { FilesTable } from "@/components/files-table";
 import { CredentialsTable } from "@/components/credentials-table";
 import { PacketsTable } from "@/components/packets-table";
+import { WiFiTable } from "@/components/wifi-table";
 import type { AnalysisResult } from "@shared/schema";
 
 export default function Analysis() {
@@ -57,6 +58,9 @@ export default function Analysis() {
       </div>
     );
   }
+
+  const hasWiFi = result.wifiNetworks && result.wifiNetworks.length > 0;
+  const tabCount = hasWiFi ? 7 : 6;
 
   return (
     <div className="min-h-screen bg-background">
@@ -114,10 +118,13 @@ export default function Analysis() {
 
           {/* Tabs */}
           <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6 gap-1 h-auto p-1 bg-muted/50">
+            <TabsList className={`grid w-full grid-cols-3 lg:grid-cols-${tabCount} gap-1 h-auto p-1 bg-muted/50`}>
               <TabsTrigger value="overview" data-testid="tab-overview" className="data-[state=inactive]:text-foreground/80">Overview</TabsTrigger>
               <TabsTrigger value="http" data-testid="tab-http" className="data-[state=inactive]:text-foreground/80">HTTP</TabsTrigger>
               <TabsTrigger value="dns" data-testid="tab-dns" className="data-[state=inactive]:text-foreground/80">DNS</TabsTrigger>
+              {hasWiFi && (
+                <TabsTrigger value="wifi" data-testid="tab-wifi" className="data-[state=inactive]:text-foreground/80">WiFi</TabsTrigger>
+              )}
               <TabsTrigger value="files" data-testid="tab-files" className="data-[state=inactive]:text-foreground/80">Files</TabsTrigger>
               <TabsTrigger value="credentials" data-testid="tab-credentials" className="data-[state=inactive]:text-foreground/80">Credentials</TabsTrigger>
               <TabsTrigger value="packets" data-testid="tab-packets" className="data-[state=inactive]:text-foreground/80">Packets</TabsTrigger>
@@ -175,6 +182,20 @@ export default function Analysis() {
                 <DnsTable queries={result.dnsQueries} />
               </div>
             </TabsContent>
+
+            {hasWiFi && (
+              <TabsContent value="wifi" className="mt-6">
+                <div className="space-y-4">
+                  <div>
+                    <h2 className="text-2xl font-semibold">WiFi Networks</h2>
+                    <p className="text-sm text-muted-foreground">
+                      {result.wifiNetworks?.length || 0} wireless networks detected
+                    </p>
+                  </div>
+                  <WiFiTable networks={result.wifiNetworks || []} />
+                </div>
+              </TabsContent>
+            )}
 
             <TabsContent value="files" className="mt-6">
               <div className="space-y-4">
