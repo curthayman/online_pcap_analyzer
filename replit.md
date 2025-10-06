@@ -58,11 +58,14 @@ Preferred communication style: Simple, everyday language.
   - `pcap-ng-parser` for PCAPNG format (magic number 0x0a0d0d0a)
 - Automatic format detection by reading file magic number
 - Network topology extracted by analyzing source/destination IPs and MAC addresses
-- Protocol detection and classification from packet headers
+- Protocol detection and classification from packet headers:
+  - HTTP, DNS, FTP, Telnet (standard protocols)
+  - **STUN** - WebRTC NAT traversal (reliable indicator of Slack, Zoom, WebRTC video calls)
 - HTTP transaction reconstruction from TCP streams
 - DNS query extraction and response mapping
 - Credential detection through pattern matching in cleartext protocols
 - File extraction from HTTP responses with base64 encoding for transport
+- WebRTC/video call detection via STUN protocol analysis
 
 **API Design**
 - RESTful endpoints for file upload and analysis retrieval

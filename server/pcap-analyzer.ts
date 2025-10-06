@@ -459,7 +459,31 @@ function parsePacket(data: Buffer, timestamp: number): Packet | null {
           sourcePort = transportData.readUInt16BE(0);
           destPort = transportData.readUInt16BE(2);
           
-          if (destPort === 53 || sourcePort === 53) protocolName = 'DNS';
+          if (destPort === 53 || sourcePort === 53) {
+            protocolName = 'DNS';
+          } else if (transportData.length >= 20) {
+            // Conservative WebRTC/video call detection
+            const udpPayload = transportData.slice(8); // Skip UDP header
+            
+            // STUN detection - most reliable WebRTC indicator
+            if (udpPayload.length >= 20) {
+              const messageType = udpPayload.readUInt16BE(0);
+              const messageLength = udpPayload.readUInt16BE(2);
+              const stunMagic = udpPayload.readUInt32BE(4);
+              
+              // STUN validation: magic cookie, valid length, known message types
+              if (stunMagic === 0x2112A442 && 
+                  messageLength >= 0 && 
+                  messageLength === (udpPayload.length - 20) &&
+                  (messageType === 0x0001 || // Binding Request
+                   messageType === 0x0101 || // Binding Response
+                   messageType === 0x0003 || // Binding Error Response
+                   messageType === 0x0111)) { // Binding Indication
+                protocolName = 'STUN';
+                info = 'WebRTC NAT Traversal';
+              }
+            }
+          }
         }
       } else if (protocol === 1) {
         protocolName = 'ICMP';
