@@ -452,6 +452,10 @@ function parsePacket(data: Buffer, timestamp: number): Packet | null {
           else if (destPort === 53 || sourcePort === 53) protocolName = 'DNS';
           else if (destPort === 21 || sourcePort === 21) protocolName = 'FTP';
           else if (destPort === 23 || sourcePort === 23) protocolName = 'TELNET';
+          else if (destPort === 1723 || sourcePort === 1723) {
+            protocolName = 'PPTP';
+            info = 'VPN Traffic';
+          }
         }
       } else if (protocol === 17) { // UDP
         protocolName = 'UDP';
@@ -461,6 +465,22 @@ function parsePacket(data: Buffer, timestamp: number): Packet | null {
           
           if (destPort === 53 || sourcePort === 53) {
             protocolName = 'DNS';
+          } else if (destPort === 500 || sourcePort === 500 || destPort === 4500 || sourcePort === 4500) {
+            // IKE (IPsec key exchange)
+            protocolName = 'IKE';
+            info = 'IPsec Key Exchange (VPN)';
+          } else if (destPort === 1194 || sourcePort === 1194) {
+            // OpenVPN
+            protocolName = 'OpenVPN';
+            info = 'VPN Traffic';
+          } else if (destPort === 51820 || sourcePort === 51820) {
+            // WireGuard
+            protocolName = 'WireGuard';
+            info = 'VPN Traffic';
+          } else if (destPort === 1701 || sourcePort === 1701) {
+            // L2TP
+            protocolName = 'L2TP';
+            info = 'VPN Traffic';
           } else if (transportData.length >= 20) {
             // Conservative WebRTC/video call detection
             const udpPayload = transportData.slice(8); // Skip UDP header
@@ -487,6 +507,14 @@ function parsePacket(data: Buffer, timestamp: number): Packet | null {
         }
       } else if (protocol === 1) {
         protocolName = 'ICMP';
+      } else if (protocol === 50) {
+        // ESP - Encapsulating Security Payload (IPsec encrypted traffic)
+        protocolName = 'ESP';
+        info = 'IPsec Encrypted (VPN)';
+      } else if (protocol === 47) {
+        // GRE - used by PPTP VPN
+        protocolName = 'GRE';
+        info = 'PPTP VPN Traffic';
       }
 
       return {
