@@ -114,13 +114,13 @@ export default function Analysis() {
 
           {/* Tabs */}
           <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6">
-              <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
-              <TabsTrigger value="http" data-testid="tab-http">HTTP</TabsTrigger>
-              <TabsTrigger value="dns" data-testid="tab-dns">DNS</TabsTrigger>
-              <TabsTrigger value="files" data-testid="tab-files">Files</TabsTrigger>
-              <TabsTrigger value="credentials" data-testid="tab-credentials">Credentials</TabsTrigger>
-              <TabsTrigger value="packets" data-testid="tab-packets">Packets</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6 gap-1 h-auto p-1 bg-muted/50">
+              <TabsTrigger value="overview" data-testid="tab-overview" className="data-[state=inactive]:text-foreground/80">Overview</TabsTrigger>
+              <TabsTrigger value="http" data-testid="tab-http" className="data-[state=inactive]:text-foreground/80">HTTP</TabsTrigger>
+              <TabsTrigger value="dns" data-testid="tab-dns" className="data-[state=inactive]:text-foreground/80">DNS</TabsTrigger>
+              <TabsTrigger value="files" data-testid="tab-files" className="data-[state=inactive]:text-foreground/80">Files</TabsTrigger>
+              <TabsTrigger value="credentials" data-testid="tab-credentials" className="data-[state=inactive]:text-foreground/80">Credentials</TabsTrigger>
+              <TabsTrigger value="packets" data-testid="tab-packets" className="data-[state=inactive]:text-foreground/80">Packets</TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6 mt-6">
