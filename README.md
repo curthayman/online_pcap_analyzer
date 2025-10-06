@@ -47,7 +47,7 @@ This will install all required packages including React, Express, and the PCAP p
 npm run dev
 ```
 
-The application will start on **http://localhost:5000**
+The application will start on **http://localhost:3000**
 
 **Production Build**:
 ```bash
@@ -57,7 +57,7 @@ npm start
 
 ## Usage
 
-1. **Open your browser** and navigate to `http://localhost:5000`
+1. **Open your browser** and navigate to `http://localhost:3000`
 
 2. **Upload a PCAP file** by:
    - Dragging and dropping a `.pcap`, `.pcapng`, or `.cap` file onto the upload zone
@@ -136,10 +136,10 @@ For larger files, consider filtering/splitting them before upload.
 
 ## Troubleshooting
 
-**Port 5000 already in use:**
+**Port 3000 already in use:**
 ```bash
-# Find and kill the process using port 5000
-lsof -ti:5000 | xargs kill -9
+# Find and kill the process using port 3000
+lsof -ti:3000 | xargs kill -9
 ```
 
 **Out of memory errors:**
