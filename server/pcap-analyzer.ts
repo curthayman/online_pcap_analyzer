@@ -127,17 +127,25 @@ export async function analyzePcapFile(
 
           // Extract HTTP data
           if (packetData.protocol === 'HTTP' && packetData.payload) {
+            console.log('HTTP packet detected, payload length:', packetData.payload.length);
+            console.log('Payload preview:', packetData.payload.toString('utf8', 0, Math.min(200, packetData.payload.length)));
             const http = parseHttp(packetData.payload, packetData, timestamp);
             if (http) {
+              console.log('HTTP transaction parsed:', http.method, http.url);
               httpTransactions.push(http);
               
               // Extract credentials from HTTP
               const cred = extractHttpCredentials(http, timestamp);
-              if (cred) credentials.push(cred);
+              if (cred) {
+                console.log('Credential found:', cred.username);
+                credentials.push(cred);
+              }
 
               // Extract files from HTTP
               const file = extractHttpFile(http, timestamp);
               if (file) extractedFiles.push(file);
+            } else {
+              console.log('Failed to parse HTTP transaction');
             }
           }
 
@@ -459,7 +467,10 @@ function parsePacket(data: Buffer, timestamp: number): ParsedPacket | null {
           }
           
           // Identify application protocols
-          if (destPort === 80 || sourcePort === 80) protocolName = 'HTTP';
+          if (destPort === 80 || sourcePort === 80) {
+            protocolName = 'HTTP';
+            console.log(`HTTP detected: ${sourceIP}:${sourcePort} -> ${destIP}:${destPort}, payload size: ${payload?.length || 0}`);
+          }
           else if (destPort === 53 || sourcePort === 53) protocolName = 'DNS';
           else if (destPort === 21 || sourcePort === 21) protocolName = 'FTP';
           else if (destPort === 23 || sourcePort === 23) protocolName = 'TELNET';
