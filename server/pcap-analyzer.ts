@@ -126,8 +126,8 @@ export async function analyzePcapFile(
           }
 
           // Extract HTTP data
-          if (packetData.protocol === 'HTTP') {
-            const http = parseHttp(rawPacket.data, packetData, timestamp);
+          if (packetData.protocol === 'HTTP' && packetData.payload) {
+            const http = parseHttp(packetData.payload, packetData, timestamp);
             if (http) {
               httpTransactions.push(http);
               
@@ -367,8 +367,8 @@ async function analyzePcapngFile(
             }
 
             // Extract HTTP data
-            if (packetData.protocol === 'HTTP') {
-              const http = parseHttp(rawPacket.data, packetData, timestamp);
+            if (packetData.protocol === 'HTTP' && packetData.payload) {
+              const http = parseHttp(packetData.payload, packetData, timestamp);
               if (http) {
                 httpTransactions.push(http);
                 
@@ -417,7 +417,11 @@ async function analyzePcapngFile(
   });
 }
 
-function parsePacket(data: Buffer, timestamp: number): Packet | null {
+interface ParsedPacket extends Packet {
+  payload?: Buffer;
+}
+
+function parsePacket(data: Buffer, timestamp: number): ParsedPacket | null {
   try {
     // Parse Ethernet header (14 bytes)
     if (data.length < 14) return null;
@@ -440,12 +444,19 @@ function parsePacket(data: Buffer, timestamp: number): Packet | null {
       let sourcePort: number | undefined;
       let destPort: number | undefined;
       let info = '';
+      let payload: Buffer | undefined;
 
       if (protocol === 6) { // TCP
         protocolName = 'TCP';
         if (transportData.length >= 4) {
           sourcePort = transportData.readUInt16BE(0);
           destPort = transportData.readUInt16BE(2);
+          
+          // Extract TCP payload
+          const tcpHeaderLength = ((transportData[12] >> 4) & 0x0f) * 4;
+          if (transportData.length > tcpHeaderLength) {
+            payload = transportData.slice(tcpHeaderLength);
+          }
           
           // Identify application protocols
           if (destPort === 80 || sourcePort === 80) protocolName = 'HTTP';
@@ -605,15 +616,26 @@ function parseHttp(data: Buffer, packet: Packet, timestamp: number): HttpTransac
       const headers: Record<string, string> = {};
       
       const headerLines = text.split('\r\n');
+      let bodyStartIndex = -1;
+      
       for (let i = 1; i < headerLines.length; i++) {
         const line = headerLines[i];
-        if (!line) break;
+        if (!line) {
+          bodyStartIndex = i + 1;
+          break;
+        }
         const colonIndex = line.indexOf(':');
         if (colonIndex > 0) {
           const key = line.substring(0, colonIndex).trim();
           const value = line.substring(colonIndex + 1).trim();
           headers[key] = value;
         }
+      }
+      
+      // Extract request body if present
+      let requestBody: string | undefined;
+      if (bodyStartIndex > 0 && bodyStartIndex < headerLines.length) {
+        requestBody = headerLines.slice(bodyStartIndex).join('\r\n');
       }
       
       return {
@@ -623,6 +645,7 @@ function parseHttp(data: Buffer, packet: Packet, timestamp: number): HttpTransac
         url,
         host: headers['Host'],
         headers,
+        requestBody,
         sourceIP: packet.sourceIP,
         destIP: packet.destIP,
       };
@@ -690,6 +713,7 @@ function parseDns(data: Buffer, packet: Packet, timestamp: number): DnsQuery | n
 }
 
 function extractHttpCredentials(http: HttpTransaction, timestamp: number): Credential | null {
+  // Check Authorization header (Basic Auth)
   const authHeader = http.headers['Authorization'];
   if (authHeader && authHeader.startsWith('Basic ')) {
     try {
@@ -711,6 +735,55 @@ function extractHttpCredentials(http: HttpTransaction, timestamp: number): Crede
       }
     } catch {
       // Invalid base64
+    }
+  }
+  
+  // Check POST body for form data
+  if (http.requestBody && http.method === 'POST') {
+    const body = http.requestBody;
+    
+    // Common form field patterns for username/password
+    const usernamePatterns = [
+      /(?:username|user|uname|email|login)=([^&\r\n]+)/i,
+      /(?:username|user|uname|email|login)%3D([^&\r\n]+)/i, // URL encoded =
+    ];
+    const passwordPatterns = [
+      /(?:password|pass|passwd|pwd)=([^&\r\n]+)/i,
+      /(?:password|pass|passwd|pwd)%3D([^&\r\n]+)/i, // URL encoded =
+    ];
+    
+    let username = '';
+    let password = '';
+    
+    // Try to find username
+    for (const pattern of usernamePatterns) {
+      const match = body.match(pattern);
+      if (match) {
+        username = decodeURIComponent(match[1]);
+        break;
+      }
+    }
+    
+    // Try to find password
+    for (const pattern of passwordPatterns) {
+      const match = body.match(pattern);
+      if (match) {
+        password = decodeURIComponent(match[1]);
+        break;
+      }
+    }
+    
+    if (username && password) {
+      return {
+        id: randomUUID(),
+        protocol: 'HTTP',
+        username,
+        password,
+        type: 'plaintext',
+        timestamp: new Date(timestamp).toISOString(),
+        sourceIP: http.sourceIP,
+        destIP: http.destIP,
+      };
     }
   }
   
