@@ -14,23 +14,53 @@ export default function Home() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [analysisId, setAnalysisId] = useState<string | null>(null);
-  const progress = useProgress(analysisId);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const serverProgress = useProgress(analysisId);
+
+  // Combine upload progress and server progress
+  const progress = isUploading && uploadProgress !== null
+    ? { progress: uploadProgress, message: 'Uploading file...', status: 'uploading' as const, currentStep: 'uploading' }
+    : serverProgress;
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append('pcap', file);
-      
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
+      return new Promise<any>((resolve, reject) => {
+        const formData = new FormData();
+        formData.append('pcap', file);
+        
+        const xhr = new XMLHttpRequest();
+        
+        // Track upload progress
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const percentComplete = Math.round((e.loaded / e.total) * 100);
+            setUploadProgress(percentComplete);
+          }
+        });
+        
+        xhr.addEventListener('load', () => {
+          if (xhr.status === 200) {
+            try {
+              const data = JSON.parse(xhr.responseText);
+              setIsUploading(false);
+              setUploadProgress(null);
+              resolve(data);
+            } catch (error) {
+              reject(new Error('Failed to parse response'));
+            }
+          } else {
+            reject(new Error('Upload failed'));
+          }
+        });
+        
+        xhr.addEventListener('error', () => {
+          reject(new Error('Upload failed'));
+        });
+        
+        xhr.open('POST', '/api/upload');
+        xhr.send(formData);
       });
-      
-      if (!response.ok) {
-        throw new Error('Upload failed');
-      }
-      
-      return response.json();
     },
     onSuccess: (data) => {
       setAnalysisId(data.id);
@@ -42,10 +72,14 @@ export default function Home() {
         variant: "destructive",
       });
       setAnalysisId(null);
+      setIsUploading(false);
+      setUploadProgress(null);
     },
   });
 
   const handleFileSelect = (file: File) => {
+    setIsUploading(true);
+    setUploadProgress(0);
     uploadMutation.mutate(file);
   };
 
