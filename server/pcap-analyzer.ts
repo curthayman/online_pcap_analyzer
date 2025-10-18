@@ -87,7 +87,7 @@ export async function analyzePcapFile(
 
     const parser = pcapp.parse(filePath);
 
-    parser.on('globalHeader', (header: any) => {
+    (parser as any).on('globalHeader', (header: any) => {
       linkLayerType = header.linkLayerType || 1;
       console.log(`PCAP Link Layer Type: ${linkLayerType}`);
     });
@@ -874,14 +874,86 @@ function parseWiFiPacket(data: Buffer, timestamp: number, linkLayerType: number)
       info: `${frameTypeName}: ${frameSubtypeName}`,
     };
     
+    // Try to parse IP layer from WiFi data frames
+    let ipProtocol: string | undefined;
+    let sourceIP: string | undefined;
+    let destIP: string | undefined;
+    let sourcePort: number | undefined;
+    let destPort: number | undefined;
+    let ipInfo: string | undefined;
+    
+    if (frameType === 2 && !encrypted) { // Data frame and not encrypted
+      // WiFi data frames have LLC/SNAP header (8 bytes) before IP
+      const llcOffset = offset + 24;
+      if (data.length >= llcOffset + 8) {
+        const llcData = data.slice(llcOffset);
+        // Check for IP (SNAP type 0x0800)
+        if (llcData.length >= 8 && llcData[6] === 0x08 && llcData[7] === 0x00) {
+          const ipData = llcData.slice(8);
+          if (ipData.length >= 20) {
+            const protocol = ipData[9];
+            sourceIP = `${ipData[12]}.${ipData[13]}.${ipData[14]}.${ipData[15]}`;
+            destIP = `${ipData[16]}.${ipData[17]}.${ipData[18]}.${ipData[19]}`;
+            
+            const ipHeaderLength = (ipData[0] & 0x0f) * 4;
+            const transportData = ipData.slice(ipHeaderLength);
+            
+            // Detect VPN and other protocols
+            if (protocol === 6 && transportData.length >= 4) { // TCP
+              sourcePort = transportData.readUInt16BE(0);
+              destPort = transportData.readUInt16BE(2);
+              
+              if (destPort === 1723 || sourcePort === 1723) {
+                ipProtocol = 'PPTP';
+                ipInfo = 'VPN Traffic';
+              } else if (destPort === 80 || sourcePort === 80) {
+                ipProtocol = 'HTTP';
+              } else {
+                ipProtocol = 'TCP';
+              }
+            } else if (protocol === 17 && transportData.length >= 4) { // UDP
+              sourcePort = transportData.readUInt16BE(0);
+              destPort = transportData.readUInt16BE(2);
+              
+              if (destPort === 500 || sourcePort === 500 || destPort === 4500 || sourcePort === 4500) {
+                ipProtocol = 'IKE';
+                ipInfo = 'IPsec Key Exchange (VPN)';
+              } else if (destPort === 1194 || sourcePort === 1194) {
+                ipProtocol = 'OpenVPN';
+                ipInfo = 'VPN Traffic';
+              } else if (destPort === 51820 || sourcePort === 51820) {
+                ipProtocol = 'WireGuard';
+                ipInfo = 'VPN Traffic';
+              } else if (destPort === 1701 || sourcePort === 1701) {
+                ipProtocol = 'L2TP';
+                ipInfo = 'VPN Traffic';
+              } else {
+                ipProtocol = 'UDP';
+              }
+            } else if (protocol === 50) {
+              ipProtocol = 'ESP';
+              ipInfo = 'IPsec Encrypted (VPN)';
+            } else if (protocol === 47) {
+              ipProtocol = 'GRE';
+              ipInfo = 'PPTP VPN Traffic';
+            } else if (protocol === 1) {
+              ipProtocol = 'ICMP';
+            }
+          }
+        }
+      }
+    }
+    
     return {
       id: randomUUID(),
       timestamp: new Date(timestamp).toISOString(),
-      protocol: `WiFi-${frameTypeName}`,
-      sourceIP: sourceMAC || 'Unknown',
-      destIP: destMAC || 'Unknown',
+      protocol: ipProtocol || `WiFi-${frameTypeName}`,
+      sourceIP: sourceIP || sourceMAC || 'Unknown',
+      destIP: destIP || destMAC || 'Unknown',
+      sourcePort,
+      destPort,
       length: data.length,
-      info: wifiFrame.info,
+      info: ipInfo || wifiFrame.info,
       wifiFrame,
     };
   } catch {
