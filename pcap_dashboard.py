@@ -101,6 +101,7 @@ if uploaded_file:
 
     file_ext = os.path.splitext(uploaded_file.name)[1].lower()
 
+    total_packets = 0
     ip_counter = Counter()
     proto_counter = Counter()
     src_dst_counter = Counter()
@@ -200,6 +201,7 @@ if uploaded_file:
                 }
 
         for pkt in packets:
+            total_packets += 1
             if IP in pkt:
                 src = pkt[IP].src
                 dst = pkt[IP].dst
@@ -250,6 +252,7 @@ if uploaded_file:
                 return None
 
         for pkt in packets:
+            total_packets += 1
             try:
                 if hasattr(pkt, 'ip'):
                     src = get_attr(pkt.ip, 'src')
@@ -367,7 +370,7 @@ if uploaded_file:
     arp_spoofed = {ip: macs for ip, macs in arp_table.items() if len(macs) > 1}
 
     st.header("Summary")
-    st.write(f"**Total packets:** {len(ip_counter)}")
+    st.write(f"**Total packets:** {total_packets}")
     st.write(f"**Unique IPs:** {len(ip_counter)}")
 
     st.subheader("Top IPs")
