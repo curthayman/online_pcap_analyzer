@@ -237,8 +237,8 @@ export default function Home() {
         <Card className="max-w-4xl mx-auto p-12 text-center bg-gradient-to-br from-primary/5 to-chart-1/5 border-primary/20">
           <h3 className="text-3xl font-bold mb-4">Ready to Analyze?</h3>
           <p className="text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Upload your PCAP file now and get instant insights into your network traffic. 
-            Supports .pcap and .pcapng formats up to 25MB.
+            Upload your PCAP file now and get instant insights into your network traffic.
+            Supports .pcap and .pcapng formats up to 500MB.
           </p>
           <Button
             size="lg"

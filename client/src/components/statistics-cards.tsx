@@ -40,11 +40,6 @@ export function StatisticsCards({
   // Detect VPN traffic
   const vpnProtocols = ['ESP', 'IKE', 'OpenVPN', 'WireGuard', 'PPTP', 'GRE', 'L2TP'];
   const hasVpn = vpnProtocols.some(protocol => (statistics.protocolDistribution[protocol] || 0) > 0);
-  
-  // Debug: log protocol distribution to console
-  console.log('Protocol Distribution:', statistics.protocolDistribution);
-  console.log('VPN Detection - Found protocols:', vpnProtocols.filter(p => statistics.protocolDistribution[p] > 0));
-  console.log('VPN Detection - hasVpn:', hasVpn);
 
   const cards = hasVideoCalls ? [
     {

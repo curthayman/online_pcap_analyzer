@@ -14,6 +14,7 @@ import type {
   PcapStatistics,
   WiFiFrame,
   WiFiNetwork,
+  VpnDetection,
 } from '@shared/schema';
 import { randomUUID } from 'crypto';
 
@@ -185,24 +186,62 @@ export async function analyzePcapFile(
 
     parser.on('end', () => {
       progressCallback?.(75, 'Building network topology...', 'finalizing');
-      
+
       const duration = (endTime - startTime) / 1000;
-      
-      // Calculate top talkers
-      const nodePacketCounts = new Map<string, number>();
+
+      // Calculate top talkers (prefer IP addresses, fall back to MAC if no IPs available)
+      const ipPacketCounts = new Map<string, number>();
+      const ipBytesCounts = new Map<string, number>();
+      const macPacketCounts = new Map<string, number>();
+      const macBytesCounts = new Map<string, number>();
+
+      // Helper function to check if string is a valid IP address (not MAC address)
+      const isValidIP = (addr: string): boolean => {
+        // IP addresses have dots, MAC addresses have colons
+        if (!addr || addr.includes(':') || addr === 'Unknown') return false;
+        // Basic IPv4 validation
+        const parts = addr.split('.');
+        if (parts.length !== 4) return false;
+        return parts.every(part => {
+          const num = parseInt(part, 10);
+          return !isNaN(num) && num >= 0 && num <= 255;
+        });
+      };
+
       packets.forEach(p => {
-        if (p.sourceIP) {
-          nodePacketCounts.set(p.sourceIP, (nodePacketCounts.get(p.sourceIP) || 0) + 1);
+        // Count IP addresses
+        if (p.sourceIP && isValidIP(p.sourceIP)) {
+          ipPacketCounts.set(p.sourceIP, (ipPacketCounts.get(p.sourceIP) || 0) + 1);
+          ipBytesCounts.set(p.sourceIP, (ipBytesCounts.get(p.sourceIP) || 0) + p.length);
+        }
+        if (p.destIP && p.destIP !== p.sourceIP && isValidIP(p.destIP)) {
+          ipPacketCounts.set(p.destIP, (ipPacketCounts.get(p.destIP) || 0) + 1);
+          ipBytesCounts.set(p.destIP, (ipBytesCounts.get(p.destIP) || 0) + p.length);
+        }
+
+        // Also count MAC addresses as fallback
+        if (p.sourceIP && !isValidIP(p.sourceIP)) {
+          macPacketCounts.set(p.sourceIP, (macPacketCounts.get(p.sourceIP) || 0) + 1);
+          macBytesCounts.set(p.sourceIP, (macBytesCounts.get(p.sourceIP) || 0) + p.length);
+        }
+        if (p.destIP && p.destIP !== p.sourceIP && !isValidIP(p.destIP)) {
+          macPacketCounts.set(p.destIP, (macPacketCounts.get(p.destIP) || 0) + 1);
+          macBytesCounts.set(p.destIP, (macBytesCounts.get(p.destIP) || 0) + p.length);
         }
       });
-      
-      const topTalkers = Array.from(nodePacketCounts.entries())
+
+      // Use IP addresses if available, otherwise fall back to MAC addresses
+      const useIPs = ipPacketCounts.size > 0;
+      const talkerCounts = useIPs ? ipPacketCounts : macPacketCounts;
+      const talkerBytes = useIPs ? ipBytesCounts : macBytesCounts;
+
+      const topTalkers = Array.from(talkerCounts.entries())
         .sort((a, b) => b[1] - a[1])
         .slice(0, 10)
         .map(([ip, count]) => ({
           ip,
           packets: count,
-          bytes: connections.get(ip)?.bytes || 0,
+          bytes: talkerBytes.get(ip) || 0,
         }));
 
       progressCallback?.(85, 'Generating statistics...', 'finalizing');
@@ -221,6 +260,8 @@ export async function analyzePcapFile(
 
       progressCallback?.(95, 'Finalizing analysis...', 'finalizing');
 
+      const vpnDetection = detectVpnFromPackets(packets, protocolCount);
+
       const result: AnalysisResult = {
         analysis: {
           id: analysisId,
@@ -231,6 +272,7 @@ export async function analyzePcapFile(
           totalPackets: packets.length,
           duration,
           protocols: Array.from(protocolCount.keys()),
+          vpnDetection,
         },
         statistics,
         nodes: Array.from(nodes.values()),
@@ -293,21 +335,59 @@ async function analyzePcapngFile(
       
       const duration = (endTime - startTime) / 1000;
       
-      // Calculate top talkers
-      const nodePacketCounts = new Map<string, number>();
+      // Calculate top talkers (prefer IP addresses, fall back to MAC if no IPs available)
+      const ipPacketCounts = new Map<string, number>();
+      const ipBytesCounts = new Map<string, number>();
+      const macPacketCounts = new Map<string, number>();
+      const macBytesCounts = new Map<string, number>();
+
+      // Helper function to check if string is a valid IP address (not MAC address)
+      const isValidIP = (addr: string): boolean => {
+        // IP addresses have dots, MAC addresses have colons
+        if (!addr || addr.includes(':') || addr === 'Unknown') return false;
+        // Basic IPv4 validation
+        const parts = addr.split('.');
+        if (parts.length !== 4) return false;
+        return parts.every(part => {
+          const num = parseInt(part, 10);
+          return !isNaN(num) && num >= 0 && num <= 255;
+        });
+      };
+
       packets.forEach(p => {
-        if (p.sourceIP) {
-          nodePacketCounts.set(p.sourceIP, (nodePacketCounts.get(p.sourceIP) || 0) + 1);
+        // Count IP addresses
+        if (p.sourceIP && isValidIP(p.sourceIP)) {
+          ipPacketCounts.set(p.sourceIP, (ipPacketCounts.get(p.sourceIP) || 0) + 1);
+          ipBytesCounts.set(p.sourceIP, (ipBytesCounts.get(p.sourceIP) || 0) + p.length);
+        }
+        if (p.destIP && p.destIP !== p.sourceIP && isValidIP(p.destIP)) {
+          ipPacketCounts.set(p.destIP, (ipPacketCounts.get(p.destIP) || 0) + 1);
+          ipBytesCounts.set(p.destIP, (ipBytesCounts.get(p.destIP) || 0) + p.length);
+        }
+
+        // Also count MAC addresses as fallback
+        if (p.sourceIP && !isValidIP(p.sourceIP)) {
+          macPacketCounts.set(p.sourceIP, (macPacketCounts.get(p.sourceIP) || 0) + 1);
+          macBytesCounts.set(p.sourceIP, (macBytesCounts.get(p.sourceIP) || 0) + p.length);
+        }
+        if (p.destIP && p.destIP !== p.sourceIP && !isValidIP(p.destIP)) {
+          macPacketCounts.set(p.destIP, (macPacketCounts.get(p.destIP) || 0) + 1);
+          macBytesCounts.set(p.destIP, (macBytesCounts.get(p.destIP) || 0) + p.length);
         }
       });
-      
-      const topTalkers = Array.from(nodePacketCounts.entries())
+
+      // Use IP addresses if available, otherwise fall back to MAC addresses
+      const useIPs = ipPacketCounts.size > 0;
+      const talkerCounts = useIPs ? ipPacketCounts : macPacketCounts;
+      const talkerBytes = useIPs ? ipBytesCounts : macBytesCounts;
+
+      const topTalkers = Array.from(talkerCounts.entries())
         .sort((a, b) => b[1] - a[1])
         .slice(0, 10)
         .map(([ip, count]) => ({
           ip,
           packets: count,
-          bytes: connections.get(ip)?.bytes || 0,
+          bytes: talkerBytes.get(ip) || 0,
         }));
 
       progressCallback?.(85, 'Generating statistics...', 'finalizing');
@@ -326,6 +406,8 @@ async function analyzePcapngFile(
 
       progressCallback?.(95, 'Finalizing analysis...', 'finalizing');
 
+      const vpnDetection = detectVpnFromPackets(packets, protocolCount);
+
       const result: AnalysisResult = {
         analysis: {
           id: analysisId,
@@ -336,6 +418,7 @@ async function analyzePcapngFile(
           totalPackets: packets.length,
           duration,
           protocols: Array.from(protocolCount.keys()),
+          vpnDetection,
         },
         statistics,
         nodes: Array.from(nodes.values()),
@@ -959,6 +1042,77 @@ function parseWiFiPacket(data: Buffer, timestamp: number, linkLayerType: number)
   } catch {
     return null;
   }
+}
+
+function isPrivateIP(ip: string): boolean {
+  const parts = ip.split('.').map(Number);
+  if (parts.length !== 4 || parts.some(isNaN)) return true;
+  return (
+    parts[0] === 10 ||
+    (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+    (parts[0] === 192 && parts[1] === 168) ||
+    parts[0] === 127
+  );
+}
+
+function detectVpnFromPackets(packets: Packet[], protocolCount: Map<string, number>): VpnDetection | undefined {
+  const indicators: string[] = [];
+  let vpnType: string | undefined;
+  let confidence: 'high' | 'medium' | 'low' = 'low';
+  let tunnelEndpoint: string | undefined;
+
+  // Check for explicit VPN protocol packets
+  const explicitVpnProtos: Record<string, string> = {
+    ESP: 'IPsec VPN',
+    GRE: 'PPTP VPN',
+    PPTP: 'PPTP VPN',
+    IKE: 'IPsec VPN',
+    OpenVPN: 'OpenVPN',
+    WireGuard: 'WireGuard VPN',
+    L2TP: 'L2TP VPN',
+  };
+
+  for (const [proto, label] of Object.entries(explicitVpnProtos)) {
+    const count = protocolCount.get(proto) || 0;
+    if (count > 0) {
+      indicators.push(`${proto} protocol detected (${count} packets)`);
+      if (!vpnType) vpnType = label;
+      confidence = 'high';
+    }
+  }
+
+  // Check for QUIC/UDP-443 tunnel pattern — VPNs that disguise traffic as HTTPS
+  if (!vpnType) {
+    const udp443Counts = new Map<string, number>();
+    let totalUdp443 = 0;
+
+    for (const p of packets) {
+      const port = p.destPort ?? p.sourcePort;
+      if (port === 443 && !isPrivateIP(p.destIP) && p.destIP && p.destIP !== 'Unknown') {
+        udp443Counts.set(p.destIP, (udp443Counts.get(p.destIP) || 0) + 1);
+        totalUdp443++;
+      }
+    }
+
+    if (totalUdp443 >= 20) {
+      const sorted = Array.from(udp443Counts.entries()).sort((a, b) => b[1] - a[1]);
+      const [topIP, topCount] = sorted[0];
+      const dominance = topCount / totalUdp443;
+
+      if (dominance >= 0.6) {
+        tunnelEndpoint = topIP;
+        const pct = Math.round(dominance * 100);
+        indicators.push(`${pct}% of external UDP/443 traffic flows to single endpoint (${topIP})`);
+        indicators.push('Sustained QUIC tunnel to one server — consistent with a VPN tunneling traffic over UDP/443 (HTTPS obfuscation)');
+        vpnType = 'QUIC-tunneled VPN (VPN-over-HTTPS)';
+        confidence = dominance >= 0.85 ? 'high' : 'medium';
+      }
+    }
+  }
+
+  if (indicators.length === 0) return undefined;
+
+  return { detected: true, vpnType, confidence, indicators, tunnelEndpoint };
 }
 
 function formatMAC(buffer: Buffer): string {

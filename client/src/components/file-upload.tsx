@@ -7,7 +7,7 @@ interface FileUploadProps {
   maxSize?: number;
 }
 
-export function FileUpload({ onFileSelect, maxSize = 25 * 1024 * 1024 }: FileUploadProps) {
+export function FileUpload({ onFileSelect, maxSize = 500 * 1024 * 1024 }: FileUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

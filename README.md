@@ -4,12 +4,25 @@ A browser-based network traffic analysis tool for analyzing PCAP files. Features
 
 ## Features
 
-- 📊 **Network Topology Visualization** - Interactive graph showing connections between network nodes
-- 🔍 **Protocol Analysis** - Support for HTTP, DNS, TCP, UDP, IPv4/IPv6, FTP, Telnet, and more
+### Visualizations & Analysis
+- 📊 **Executive Summary** - At-a-glance overview with color-coded security status
+- 🥧 **Protocol Distribution Pie Chart** - Visual breakdown of network protocols with percentages
+- 📊 **Top Talkers Bar Chart** - Identify the most active hosts by packet count
+- 🕸️ **Network Topology Graph** - Interactive visualization of connections between nodes
+- 📡 **WiFi Network Detection** - Detect and analyze wireless networks (SSID, BSSID, encryption, clients)
+
+### Protocol Support & Deep Inspection
+- 🔍 **Protocol Analysis** - HTTP, DNS, TCP, UDP, IPv4/IPv6, FTP, Telnet, ICMP, VPN (PPTP, OpenVPN, WireGuard, IPsec)
+- 🌐 **HTTP Analysis** - Full request/response inspection with headers and status codes
+- 🔎 **DNS Query Analysis** - Track domain lookups and responses
 - 📁 **File Extraction** - Carve and download files from network traffic
 - 🔐 **Credential Detection** - Identify plaintext credentials (HTTP Basic Auth, FTP, Telnet)
-- 📈 **Real-time Progress** - Live progress updates during PCAP analysis
-- 🎨 **Beautiful UI** - Professional design with dark mode support
+
+### User Experience
+- 📈 **Real-time Progress** - Live progress updates with SSE during PCAP analysis
+- 🎨 **Beautiful UI** - Professional design with dark/light mode support
+- 📊 **Rich Statistics Cards** - Total packets, data volume, duration, and more
+- 💾 **Large File Support** - Handle PCAP files up to 500MB
 
 ## Requirements
 
@@ -71,19 +84,24 @@ npm start
    - Completed (100%)
 
 4. **Explore the analysis** in the dashboard:
-   - **Overview Tab**: Network graph, connection statistics, protocol distribution
+   - **Executive Summary**: High-level overview with color-coded security status
+   - **Overview Tab**:
+     - Network topology graph
+     - Protocol distribution pie chart with percentages
+     - Top talkers bar chart showing most active hosts
    - **HTTP Tab**: HTTP requests/responses with headers and status codes
    - **DNS Tab**: DNS queries and responses
+   - **WiFi Tab** (if applicable): Detected wireless networks with encryption info
    - **Files Tab**: Extracted files available for download
    - **Credentials Tab**: Detected plaintext credentials
    - **Packets Tab**: Raw packet details
 
 ## File Size Limits
 
-- Maximum file size: **25MB**
+- Maximum file size: **500MB**
 - Supported formats: `.pcap`, `.pcapng`, `.cap`
 
-For larger files, consider filtering/splitting them before upload.
+For optimal performance with very large files (>100MB), the analyzer automatically limits packet processing while maintaining statistical accuracy.
 
 ## Architecture
 

@@ -1,6 +1,16 @@
 import { z } from "zod";
 
 // PCAP Analysis Schema
+export const vpnDetectionSchema = z.object({
+  detected: z.boolean(),
+  vpnType: z.string().optional(),
+  confidence: z.enum(['high', 'medium', 'low']),
+  indicators: z.array(z.string()),
+  tunnelEndpoint: z.string().optional(),
+});
+
+export type VpnDetection = z.infer<typeof vpnDetectionSchema>;
+
 export const pcapAnalysisSchema = z.object({
   id: z.string(),
   fileName: z.string(),
@@ -10,6 +20,7 @@ export const pcapAnalysisSchema = z.object({
   totalPackets: z.number(),
   duration: z.number().optional(),
   protocols: z.array(z.string()),
+  vpnDetection: vpnDetectionSchema.optional(),
 });
 
 export type PcapAnalysis = z.infer<typeof pcapAnalysisSchema>;
@@ -150,6 +161,19 @@ export const wifiNetworkSchema = z.object({
 
 export type WiFiNetwork = z.infer<typeof wifiNetworkSchema>;
 
+// Security Finding Schema
+export const securityFindingSchema = z.object({
+  id: z.string(),
+  severity: z.enum(['critical', 'high', 'medium', 'low', 'info']),
+  type: z.string(),
+  description: z.string(),
+  details: z.string().optional(),
+  timestamp: z.string().optional(),
+  affectedHost: z.string().optional(),
+});
+
+export type SecurityFinding = z.infer<typeof securityFindingSchema>;
+
 // Statistics Schema
 export const pcapStatisticsSchema = z.object({
   totalPackets: z.number(),
@@ -182,6 +206,7 @@ export const analysisResultSchema = z.object({
   packets: z.array(packetSchema),
   wifiFrames: z.array(wifiFrameSchema).optional(),
   wifiNetworks: z.array(wifiNetworkSchema).optional(),
+  securityFindings: z.array(securityFindingSchema).optional(),
 });
 
 export type AnalysisResult = z.infer<typeof analysisResultSchema>;

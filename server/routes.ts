@@ -12,12 +12,12 @@ import { randomUUID } from "crypto";
 const upload = multer({
   dest: path.join(os.tmpdir(), 'pcap-uploads'),
   limits: {
-    fileSize: 25 * 1024 * 1024, // 25MB
+    fileSize: 500 * 1024 * 1024, // 500MB
   },
   fileFilter: (_req, file, cb) => {
     const validExtensions = ['.pcap', '.pcapng', '.cap'];
     const ext = path.extname(file.originalname).toLowerCase();
-    
+
     if (validExtensions.includes(ext)) {
       cb(null, true);
     } else {
@@ -138,6 +138,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error fetching analyses:', error);
       res.status(500).json({ error: 'Failed to fetch analyses' });
+    }
+  });
+
+  // MAC vendor lookup endpoint (proxy to avoid CORS)
+  app.get('/api/mac-vendor/:mac', async (req, res) => {
+    try {
+      const { mac } = req.params;
+      
+      // Call macvendors.com API
+      const response = await fetch(`https://api.macvendors.com/${encodeURIComponent(mac)}`);
+      
+      if (response.ok) {
+        const vendor = await response.text();
+        res.json({ vendor });
+      } else if (response.status === 404) {
+        res.json({ vendor: 'Unknown' });
+      } else {
+        res.status(response.status).json({ vendor: 'Unknown' });
+      }
+    } catch (error) {
+      console.error('MAC vendor lookup error:', error);
+      res.status(500).json({ vendor: 'Unknown' });
     }
   });
 

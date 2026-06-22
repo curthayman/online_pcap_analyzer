@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,11 +13,23 @@ import { FilesTable } from "@/components/files-table";
 import { CredentialsTable } from "@/components/credentials-table";
 import { PacketsTable } from "@/components/packets-table";
 import { WiFiTable } from "@/components/wifi-table";
-import type { AnalysisResult } from "@shared/schema";
+import { ExecutiveSummary } from "@/components/executive-summary";
+import { ProtocolChart } from "@/components/protocol-chart";
+import { TopTalkers } from "@/components/top-talkers";
+import { PacketFilter } from "@/components/packet-filter";
+import { PacketDetailViewer } from "@/components/packet-detail-viewer";
+import { TcpStreamViewer } from "@/components/tcp-stream-viewer";
+import { filterPackets } from "@/lib/packet-filter";
+import { reconstructTcpStream } from "@/lib/tcp-stream";
+import type { AnalysisResult, Packet } from "@shared/schema";
+import type { TcpStream } from "@/lib/tcp-stream";
 
 export default function Analysis() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
+  const [filterString, setFilterString] = useState('');
+  const [selectedPacket, setSelectedPacket] = useState<Packet | null>(null);
+  const [tcpStream, setTcpStream] = useState<TcpStream | null>(null);
 
   const { data: result, isLoading, error } = useQuery<AnalysisResult>({
     queryKey: ['/api/analysis', id],
@@ -60,6 +73,29 @@ export default function Analysis() {
   }
 
   const hasWiFi = result.wifiNetworks && result.wifiNetworks.length > 0;
+
+  // Filter packets based on filter string
+  const filteredPackets = filterString
+    ? filterPackets(result.packets, filterString)
+    : result.packets;
+
+  // Handlers
+  const handlePacketClick = (packet: Packet) => {
+    setSelectedPacket(packet);
+  };
+
+  const handleFollowStream = (packet: Packet) => {
+    if (packet.protocol === 'TCP' && packet.sourcePort && packet.destPort) {
+      const stream = reconstructTcpStream(
+        result.packets,
+        packet.sourceIP,
+        packet.destIP,
+        packet.sourcePort,
+        packet.destPort
+      );
+      setTcpStream(stream);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -106,6 +142,9 @@ export default function Analysis() {
       {/* Main Content */}
       <main className="container mx-auto px-6 py-8">
         <div className="space-y-8">
+          {/* Executive Summary */}
+          <ExecutiveSummary result={result} />
+
           {/* Statistics */}
           <StatisticsCards
             statistics={result.statistics}
@@ -138,23 +177,12 @@ export default function Analysis() {
                 />
               </div>
 
-              <div>
-                <h2 className="text-2xl font-semibold mb-4">Protocol Distribution</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {Object.entries(result.statistics.protocolDistribution).map(([protocol, count]) => (
-                    <div
-                      key={protocol}
-                      className="border rounded-md p-4 bg-card"
-                      data-testid={`protocol-stat-${protocol.toLowerCase()}`}
-                    >
-                      <p className="text-sm text-muted-foreground">{protocol}</p>
-                      <p className="text-2xl font-bold">{count.toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {((count / result.statistics.totalPackets) * 100).toFixed(1)}%
-                      </p>
-                    </div>
-                  ))}
-                </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <ProtocolChart
+                  protocolDistribution={result.statistics.protocolDistribution}
+                  totalPackets={result.statistics.totalPackets}
+                />
+                <TopTalkers topTalkers={result.statistics.topTalkers} />
               </div>
             </TabsContent>
 
@@ -228,10 +256,25 @@ export default function Analysis() {
                     {result.packets.length} packets captured
                   </p>
                 </div>
-                <PacketsTable packets={result.packets.slice(0, 100)} />
-                {result.packets.length > 100 && (
+
+                {/* Packet Filter */}
+                <PacketFilter
+                  value={filterString}
+                  onChange={setFilterString}
+                  resultCount={filteredPackets.length}
+                  totalCount={result.packets.length}
+                />
+
+                {/* Packets Table */}
+                <PacketsTable
+                  packets={filteredPackets.slice(0, 100)}
+                  onPacketClick={handlePacketClick}
+                  onFollowStream={handleFollowStream}
+                />
+                {filteredPackets.length > 100 && (
                   <p className="text-sm text-muted-foreground text-center py-4">
-                    Showing first 100 packets of {result.packets.length} total
+                    Showing first 100 packets of {filteredPackets.length}{' '}
+                    {filterString ? 'filtered' : 'total'}
                   </p>
                 )}
               </div>
@@ -239,6 +282,18 @@ export default function Analysis() {
           </Tabs>
         </div>
       </main>
+
+      {/* Packet Detail Viewer */}
+      <PacketDetailViewer
+        packet={selectedPacket}
+        onClose={() => setSelectedPacket(null)}
+      />
+
+      {/* TCP Stream Viewer */}
+      <TcpStreamViewer
+        stream={tcpStream}
+        onClose={() => setTcpStream(null)}
+      />
     </div>
   );
 }
