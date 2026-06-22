@@ -63,7 +63,7 @@ export function TopTalkers({ topTalkers }: TopTalkersProps) {
       </p>
 
       <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data} layout="horizontal">
+        <BarChart data={data} layout="vertical">
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
           <XAxis
             type="number"
@@ -76,7 +76,7 @@ export function TopTalkers({ topTalkers }: TopTalkersProps) {
             width={120}
             tick={{ fontSize: 11 }}
           />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />
           <Bar dataKey="packets" radius={[0, 4, 4, 0]}>
             {data.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
