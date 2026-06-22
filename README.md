@@ -1,15 +1,22 @@
 # PCAP Analyzer
 
-A browser-based network traffic analysis tool for analyzing PCAP files. Features protocol decoding, network topology visualization, HTTP/DNS analysis, file extraction, and credential detection.
+A browser-based network traffic analysis tool for analyzing PCAP and PCAPNG files. Features VPN detection, protocol decoding, network topology visualization, HTTP/DNS analysis, file extraction, and credential detection — all running locally with no data leaving your machine.
 
 ## Features
 
 ### Visualizations & Analysis
-- 📊 **Executive Summary** - At-a-glance overview with color-coded security status
+- 📊 **Executive Summary** - At-a-glance overview with color-coded security status and VPN detection banner
 - 🥧 **Protocol Distribution Pie Chart** - Visual breakdown of network protocols with percentages
 - 📊 **Top Talkers Bar Chart** - Identify the most active hosts by packet count
 - 🕸️ **Network Topology Graph** - Interactive visualization of connections between nodes
 - 📡 **WiFi Network Detection** - Detect and analyze wireless networks (SSID, BSSID, encryption, clients)
+
+### VPN Detection
+- 🔒 **Automatic VPN Detection** - Identifies when a capture was recorded behind a VPN
+- Detects explicit VPN protocols: ESP (IPsec), GRE, PPTP, IKE, OpenVPN, WireGuard, L2TP
+- Detects **QUIC-tunneled VPNs** — VPNs that disguise traffic over UDP/443 (VPN-over-HTTPS obfuscation)
+- Shows confidence level, tunnel endpoint, and specific indicators
+- Warns that payload content will be encrypted and unreadable when VPN is active
 
 ### Protocol Support & Deep Inspection
 - 🔍 **Protocol Analysis** - HTTP, DNS, TCP, UDP, IPv4/IPv6, FTP, Telnet, ICMP, VPN (PPTP, OpenVPN, WireGuard, IPsec)
@@ -17,6 +24,9 @@ A browser-based network traffic analysis tool for analyzing PCAP files. Features
 - 🔎 **DNS Query Analysis** - Track domain lookups and responses
 - 📁 **File Extraction** - Carve and download files from network traffic
 - 🔐 **Credential Detection** - Identify plaintext credentials (HTTP Basic Auth, FTP, Telnet)
+- 🔬 **Packet Detail Viewer** - Click any packet for a full breakdown
+- 🌊 **TCP Stream Reconstruction** - Follow and read TCP streams between hosts
+- 🔎 **Packet Filter** - Wireshark-style filter bar to search packets by protocol, IP, port, or keyword
 
 ### User Experience
 - 📈 **Real-time Progress** - Live progress updates with SSE during PCAP analysis
@@ -27,22 +37,16 @@ A browser-based network traffic analysis tool for analyzing PCAP files. Features
 ## Requirements
 
 - **Node.js** 18 or higher (tested on Node.js 20)
-- **macOS** (tested on MacBook Air M2) or Linux
+- **macOS** or Linux
 - **RAM**: 4GB minimum (8GB recommended for large PCAP files)
 
 ## Installation & Setup
 
-### 1. Download the Project
+### 1. Clone the Repository
 
-If you're on Replit, download the project:
-- Click the three dots menu (⋮) in the top right
-- Select "Download as zip"
-- Extract the zip file on your MacBook Air M2
-
-Or clone from a git repository if available:
 ```bash
-git clone <repository-url>
-cd pcap-analyzer
+git clone https://github.com/curthayman/online_pcap_analyzer.git
+cd online_pcap_analyzer
 ```
 
 ### 2. Install Dependencies
