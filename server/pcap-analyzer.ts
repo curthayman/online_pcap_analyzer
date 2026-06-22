@@ -156,7 +156,7 @@ export async function analyzePcapFile(
             const http = parseHttp(packetData.payload, packetData, timestamp);
             if (http) {
               httpTransactions.push(http);
-              
+
               // Extract credentials from HTTP
               const cred = extractHttpCredentials(http, timestamp);
               if (cred) credentials.push(cred);
@@ -164,7 +164,17 @@ export async function analyzePcapFile(
               // Extract files from HTTP
               const file = extractHttpFile(http, timestamp);
               if (file) extractedFiles.push(file);
+            } else {
+              // No HTTP verb — this is a TCP continuation segment carrying the POST body
+              const cred = extractCredsFromTcpPayload(packetData.payload, packetData, timestamp);
+              if (cred) credentials.push(cred);
             }
+          }
+
+          // Also catch continuation segments on non-HTTP-labeled TCP (e.g. port 8080)
+          if (packetData.protocol === 'TCP' && packetData.payload && packetData.payload.length > 0) {
+            const cred = extractCredsFromTcpPayload(packetData.payload, packetData, timestamp);
+            if (cred) credentials.push(cred);
           }
 
           // Extract DNS data
@@ -261,6 +271,7 @@ export async function analyzePcapFile(
       progressCallback?.(95, 'Finalizing analysis...', 'finalizing');
 
       const vpnDetection = detectVpnFromPackets(packets, protocolCount);
+      const securityFindings = generateSecurityFindings(credentials, httpTransactions, dnsQueries);
 
       const result: AnalysisResult = {
         analysis: {
@@ -284,6 +295,7 @@ export async function analyzePcapFile(
         packets: packets.slice(0, 1000), // Limit to first 1000 packets
         wifiFrames: wifiFrames.length > 0 ? wifiFrames.slice(0, 1000) : undefined,
         wifiNetworks: wifiNetworks.size > 0 ? Array.from(wifiNetworks.values()) : undefined,
+        securityFindings,
       };
 
       progressCallback?.(100, 'Analysis completed!', 'completed');
@@ -407,6 +419,7 @@ async function analyzePcapngFile(
       progressCallback?.(95, 'Finalizing analysis...', 'finalizing');
 
       const vpnDetection = detectVpnFromPackets(packets, protocolCount);
+      const securityFindings = generateSecurityFindings(credentials, httpTransactions, dnsQueries);
 
       const result: AnalysisResult = {
         analysis: {
@@ -430,6 +443,7 @@ async function analyzePcapngFile(
         packets: packets.slice(0, 1000), // Limit to first 1000 packets
         wifiFrames: wifiFrames.length > 0 ? wifiFrames.slice(0, 1000) : undefined,
         wifiNetworks: wifiNetworks.size > 0 ? Array.from(wifiNetworks.values()) : undefined,
+        securityFindings,
       };
 
       progressCallback?.(100, 'Analysis completed!', 'completed');
@@ -500,7 +514,7 @@ async function analyzePcapngFile(
               const http = parseHttp(packetData.payload, packetData, timestamp);
               if (http) {
                 httpTransactions.push(http);
-                
+
                 // Extract credentials from HTTP
                 const cred = extractHttpCredentials(http, timestamp);
                 if (cred) credentials.push(cred);
@@ -508,7 +522,17 @@ async function analyzePcapngFile(
                 // Extract files from HTTP
                 const file = extractHttpFile(http, timestamp);
                 if (file) extractedFiles.push(file);
+              } else {
+                // No HTTP verb — continuation segment carrying the POST body
+                const cred = extractCredsFromTcpPayload(packetData.payload, packetData, timestamp);
+                if (cred) credentials.push(cred);
               }
+            }
+
+            // Also catch continuation segments on non-HTTP-labeled TCP
+            if (packetData.protocol === 'TCP' && packetData.payload && packetData.payload.length > 0) {
+              const cred = extractCredsFromTcpPayload(packetData.payload, packetData, timestamp);
+              if (cred) credentials.push(cred);
             }
 
             // Extract DNS data
@@ -1044,6 +1068,61 @@ function parseWiFiPacket(data: Buffer, timestamp: number, linkLayerType: number)
   }
 }
 
+function generateSecurityFindings(
+  credentials: Credential[],
+  httpTransactions: HttpTransaction[],
+  dnsQueries: DnsQuery[],
+): import('@shared/schema').SecurityFinding[] {
+  const findings: import('@shared/schema').SecurityFinding[] = [];
+
+  // Plaintext credentials are critical
+  if (credentials.length > 0) {
+    const protocols = Array.from(new Set(credentials.map(c => c.protocol))).join(', ');
+    const hosts = Array.from(new Set(credentials.map(c => c.destIP).filter(Boolean))).slice(0, 3).join(', ');
+    findings.push({
+      id: randomUUID(),
+      severity: 'critical',
+      type: 'Plaintext Credentials',
+      description: `${credentials.length} set${credentials.length > 1 ? 's' : ''} of credentials transmitted in plaintext`,
+      details: `Protocol(s): ${protocols}. Usernames: ${credentials.map(c => c.username).join(', ')}. Destination(s): ${hosts}`,
+      timestamp: credentials[0].timestamp,
+      affectedHost: credentials[0].destIP,
+    });
+  }
+
+  // Unencrypted HTTP to non-local destinations
+  const externalHttp = httpTransactions.filter(
+    h => h.destIP && !isPrivateIP(h.destIP) && h.method !== 'RESPONSE'
+  );
+  if (externalHttp.length > 0) {
+    const hosts = Array.from(new Set(externalHttp.map(h => h.host).filter(Boolean))).slice(0, 5).join(', ');
+    findings.push({
+      id: randomUUID(),
+      severity: 'high',
+      type: 'Unencrypted HTTP Traffic',
+      description: `${externalHttp.length} unencrypted HTTP request${externalHttp.length > 1 ? 's' : ''} to external hosts`,
+      details: `Host(s): ${hosts || 'unknown'}. Use HTTPS to protect data in transit.`,
+      affectedHost: externalHttp[0].destIP,
+    });
+  }
+
+  // Sensitive domains in DNS queries
+  const sensitiveDomains = dnsQueries.filter(q =>
+    /login|auth|signin|account|password|credential|secure|bank|pay/i.test(q.domain)
+  );
+  if (sensitiveDomains.length > 0) {
+    findings.push({
+      id: randomUUID(),
+      severity: 'info',
+      type: 'Sensitive Domain Lookups',
+      description: `${sensitiveDomains.length} DNS lookup${sensitiveDomains.length > 1 ? 's' : ''} for potentially sensitive domains`,
+      details: sensitiveDomains.map(q => q.domain).slice(0, 5).join(', '),
+    });
+  }
+
+  return findings;
+}
+
 function isPrivateIP(ip: string): boolean {
   const parts = ip.split('.').map(Number);
   if (parts.length !== 4 || parts.some(isNaN)) return true;
@@ -1229,6 +1308,29 @@ function parseDns(data: Buffer, packet: Packet, timestamp: number): DnsQuery | n
   }
 }
 
+// Matches field names that end with or contain common username/password keywords,
+// covering generic names (username, user, email) and framework prefixes
+// (tb = ASP.NET WebForms, txt = common prefix, inp, field_, etc.)
+const USERNAME_RE = /(?:^|&)[a-z_]*(?:username|user|uname|email|login|account|userid|user_id|user_name)[a-z_]*=([^&\r\n]+)/i;
+const PASSWORD_RE = /(?:^|&)[a-z_]*(?:password|passwd|pass|pwd|secret|passphrase)[a-z_]*=([^&\r\n]+)/i;
+
+function extractCredsFromBody(body: string): { username: string; password: string } | null {
+  let rawUser = body.match(USERNAME_RE)?.[1];
+  let rawPass = body.match(PASSWORD_RE)?.[1];
+
+  if (!rawUser || !rawPass) return null;
+
+  try {
+    const username = decodeURIComponent(rawUser.replace(/\+/g, ' ')).trim();
+    const password = decodeURIComponent(rawPass.replace(/\+/g, ' ')).trim();
+    if (username && password) return { username, password };
+  } catch {
+    // malformed encoding — use raw values
+    if (rawUser && rawPass) return { username: rawUser, password: rawPass };
+  }
+  return null;
+}
+
 function extractHttpCredentials(http: HttpTransaction, timestamp: number): Credential | null {
   // Check Authorization header (Basic Auth)
   const authHeader = http.headers['Authorization'];
@@ -1237,11 +1339,10 @@ function extractHttpCredentials(http: HttpTransaction, timestamp: number): Crede
       const base64 = authHeader.substring(6);
       const decoded = Buffer.from(base64, 'base64').toString('utf8');
       const [username, password] = decoded.split(':');
-      
       if (username && password) {
         return {
           id: randomUUID(),
-          protocol: 'HTTP',
+          protocol: 'HTTP Basic Auth',
           username,
           password,
           type: 'plaintext',
@@ -1254,48 +1355,16 @@ function extractHttpCredentials(http: HttpTransaction, timestamp: number): Crede
       // Invalid base64
     }
   }
-  
-  // Check POST body for form data
+
+  // Check POST body for form-encoded credentials
   if (http.requestBody && http.method === 'POST') {
-    const body = http.requestBody;
-    
-    // Common form field patterns for username/password
-    const usernamePatterns = [
-      /(?:username|user|uname|email|login)=([^&\r\n]+)/i,
-      /(?:username|user|uname|email|login)%3D([^&\r\n]+)/i, // URL encoded =
-    ];
-    const passwordPatterns = [
-      /(?:password|pass|passwd|pwd)=([^&\r\n]+)/i,
-      /(?:password|pass|passwd|pwd)%3D([^&\r\n]+)/i, // URL encoded =
-    ];
-    
-    let username = '';
-    let password = '';
-    
-    // Try to find username
-    for (const pattern of usernamePatterns) {
-      const match = body.match(pattern);
-      if (match) {
-        username = decodeURIComponent(match[1]);
-        break;
-      }
-    }
-    
-    // Try to find password
-    for (const pattern of passwordPatterns) {
-      const match = body.match(pattern);
-      if (match) {
-        password = decodeURIComponent(match[1]);
-        break;
-      }
-    }
-    
-    if (username && password) {
+    const creds = extractCredsFromBody(http.requestBody);
+    if (creds) {
       return {
         id: randomUUID(),
-        protocol: 'HTTP',
-        username,
-        password,
+        protocol: 'HTTP Form POST',
+        username: creds.username,
+        password: creds.password,
         type: 'plaintext',
         timestamp: new Date(timestamp).toISOString(),
         sourceIP: http.sourceIP,
@@ -1303,7 +1372,38 @@ function extractHttpCredentials(http: HttpTransaction, timestamp: number): Crede
       };
     }
   }
-  
+
+  return null;
+}
+
+// Called on raw TCP payloads that don't start with an HTTP verb — catches POST
+// bodies that arrived in a separate TCP segment from the request headers.
+function extractCredsFromTcpPayload(
+  payload: Buffer,
+  packet: Packet,
+  timestamp: number
+): Credential | null {
+  try {
+    const text = payload.toString('utf8');
+    // Must look like URL-encoded form data (has key=value pairs)
+    if (!text.includes('=') || text.startsWith('HTTP/') || /^[A-Z]{3,7} \//.test(text)) return null;
+
+    const creds = extractCredsFromBody(text);
+    if (creds) {
+      return {
+        id: randomUUID(),
+        protocol: 'HTTP Form POST',
+        username: creds.username,
+        password: creds.password,
+        type: 'plaintext',
+        timestamp: new Date(timestamp).toISOString(),
+        sourceIP: packet.sourceIP,
+        destIP: packet.destIP,
+      };
+    }
+  } catch {
+    // ignore unparseable payloads
+  }
   return null;
 }
 
