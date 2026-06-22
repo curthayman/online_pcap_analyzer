@@ -1,0 +1,6 @@
+streamlit
+scapy>=2.4.0
+pyshark
+matplotlib
+tqdm
+requests
