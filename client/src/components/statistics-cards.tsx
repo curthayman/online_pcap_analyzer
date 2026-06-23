@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Activity, Network, FileText, Shield, Video } from "lucide-react";
-import type { PcapStatistics } from "@shared/schema";
+import type { PcapStatistics, VpnDetection } from "@shared/schema";
 
 interface StatisticsCardsProps {
   statistics: PcapStatistics;
@@ -9,14 +9,16 @@ interface StatisticsCardsProps {
   dnsCount: number;
   filesCount: number;
   credentialsCount: number;
+  vpnDetection?: VpnDetection;
 }
 
-export function StatisticsCards({ 
-  statistics, 
-  httpCount, 
-  dnsCount, 
-  filesCount, 
-  credentialsCount 
+export function StatisticsCards({
+  statistics,
+  httpCount,
+  dnsCount,
+  filesCount,
+  credentialsCount,
+  vpnDetection,
 }: StatisticsCardsProps) {
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -37,9 +39,11 @@ export function StatisticsCards({
   const stunPackets = statistics.protocolDistribution['STUN'] || 0;
   const hasVideoCalls = stunPackets > 0;
 
-  // Detect VPN traffic
+  // Detect VPN traffic — check server-side detection first (covers QUIC-tunneled VPNs),
+  // then fall back to explicit protocol presence in protocol distribution
   const vpnProtocols = ['ESP', 'IKE', 'OpenVPN', 'WireGuard', 'PPTP', 'GRE', 'L2TP'];
-  const hasVpn = vpnProtocols.some(protocol => (statistics.protocolDistribution[protocol] || 0) > 0);
+  const hasVpn = vpnDetection?.detected ||
+    vpnProtocols.some(protocol => (statistics.protocolDistribution[protocol] || 0) > 0);
 
   const cards = hasVideoCalls ? [
     {

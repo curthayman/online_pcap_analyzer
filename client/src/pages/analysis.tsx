@@ -152,6 +152,7 @@ export default function Analysis() {
             dnsCount={result.dnsQueries.length}
             filesCount={result.extractedFiles.length}
             credentialsCount={result.credentials.length}
+            vpnDetection={result.analysis.vpnDetection}
           />
 
           {/* Tabs */}
